@@ -138,78 +138,37 @@ class Api(object):
             `<http://docs.ansible.com/ansible/developing_api.html>`_
 
         """
-        # Create Inventory
-        self.inventory = Inventory(options.get('connection', None),
-                                   hosts=servers)
-
-        # Set connection to smart (if not set by user)
-        if 'connection' not in options:
-            options['connection'] = 'smart'
-
-        # sudo is just a shortcut that is easier to remember than this:
-        if not ('become' in options or 'become_user' in options):
-            options['become'] = sudo
-            options['become_user'] = 'root'
-
-        assert 'module_path' not in options, """
-            Suitable does not yet support the setting of a custom module path.
-            Please create an issue if you need this feature!
+        ...
+    
+    def package(self, name: str, version: t.Opional[str] =None, state: str = 'present', **options):
         """
-        options['module_path'] = None
+        Installs a package.
 
-        # load all the other defaults required by ansible
-        # the following are available as constants:
-        required_defaults = (
-            'forks',
-            'remote_user',
-            'private_key_file',
-            'become',
-            'become_method',
-            'become_user'
-        )
+        :param name:
+            The name of the package.
 
-        for default in required_defaults:
-            if default not in options:
-                options[default] = getattr(
-                    C, 'DEFAULT_{}'.format(default.upper())
-                )
+        :param version:
+            The version of the package. If not given, the latest version is
+            installed.
 
-        # unfortunately, not all options seem to have accessible defaults
-        options['ssh_common_args'] = options.get('ssh_common_args', None)
-        options['ssh_extra_args'] = options.get('ssh_extra_args', None)
-        options['sftp_extra_args'] = options.get('sftp_extra_args', None)
-        options['scp_extra_args'] = options.get('scp_extra_args', None)
-        options['extra_vars'] = options.get('extra_vars', {})
-        options['diff'] = options.get('diff', False)
-        options['verbosity'] = LOG_VERBOSITY.get(verbosity)
-        options['check'] = dry_run
+        :param state:
+            The state of the package. Possible values:
 
-        if 'passwords' not in options:
-            options['passwords'] = {
-                'conn_pass': (
-                    options.get('remote_pass') or options.get('conn_pass')
-                ),
-                'become_pass': (
-                    options.get('sudo_pass') or options.get('become_pass')
-                )
-            }
+            * ``present`` (default)
+            * ``absent``
+            * ``latest``
+            * ``upgraded``
 
-        # keep host_key_checking around for the runner
-        self.host_key_checking = host_key_checking
+        :param ``**options``:
+            All remaining keyword arguments are passed to the Ansible
+            module. The available options are listed here:
 
-        self.options = options_as_class(options)
-        self._valid_return_codes = (0, )
+            `<http://docs.ansible.com/ansible/developing_api.html>`_
 
-        self.ignore_unreachable = ignore_unreachable
-        self.ignore_errors = ignore_errors
+        """
+        ...
 
-        self.environment = environment or {}
-        self.strategy = strategy
-
-        for runner in (ModuleRunner(m) for m in list_ansible_modules()):
-            runner.hookup(self)
-
-    def on_unreachable_host(self, module, host):
+    def on_unreachable_host(self, module, host): 
         """ If you want to customize your error handling, this would be
         the point to write your own method in a subclass.
 
@@ -222,7 +181,7 @@ class Api(object):
         If an any exception is raised the server WILL be ignored.
 
         """
-        raise UnreachableError(module, host)
+        ...
 
     def on_module_error(self, module, host, result):
         """ If you want to customize your error handling, this would be
@@ -237,10 +196,10 @@ class Api(object):
         If an any exception is raised the server WILL be ignored.
 
         """
-        raise ModuleError(module, host, result)
+        ...
 
     def is_valid_return_code(self, code):
-        return code in self._valid_return_codes
+        ...
 
     @contextmanager
     def valid_return_codes(self, *codes):
@@ -253,12 +212,8 @@ class Api(object):
                 api.shell('test -e /tmp/log && rm /tmp/log')
 
         """
-        previous_codes = self._valid_return_codes
-        self._valid_return_codes = codes
+        ...
 
-        yield
-
-        self._valid_return_codes = previous_codes
 
 
 def install_strategy_plugins(directories):
@@ -274,42 +229,13 @@ def install_strategy_plugins(directories):
     class.
 
     """
-    if isinstance(directories, str):
-        directories = directories.split(':')
-
-    for directory in directories:
-        strategy_loader.add_directory(directory)
-
+    ...
 
 def list_ansible_modules():
     # inspired by
     # https://github.com/ansible/ansible/blob/devel/bin/ansible-doc
 
-    paths = (p for p in module_loader._get_paths() if os.path.isdir(p))
-
-    modules = set()
-
-    for path in paths:
-        modules.update(m for m in get_modules_from_path(path))
-
-    return modules
-
+    ...
 
 def get_modules_from_path(path):
-    blacklisted_extensions = ('.swp', '.bak', '~', '.rpm', '.pyc')
-    blacklisted_prefixes = ('_', )
-
-    assert os.path.isdir(path)
-
-    subpaths = list((os.path.join(path, p), p) for p in os.listdir(path))
-
-    for path, name in subpaths:
-        if name.endswith(blacklisted_extensions):
-            continue
-        if name.startswith(blacklisted_prefixes):
-            continue
-        if os.path.isdir(path):
-            for module in get_modules_from_path(path):
-                yield module
-        else:
-            yield os.path.splitext(name)[0]
+    ...
