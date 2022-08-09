@@ -8,3 +8,6 @@ dist/
 .DS_Store
 docs/build
 eggs/
+.venv/
+build/
+*ipynb
