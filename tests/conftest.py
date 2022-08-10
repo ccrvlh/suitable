@@ -74,13 +74,19 @@ def container():
 #         'rastasheep/ubuntu-sshd:18.04'
 #     ))
 
-    yield Container('docker.host.internal', "9999", 'root', 'root')
+    yield Container('localhost', "9999", 'root', 'root')
 
 #     subprocess.call(('docker', 'stop', name))
 
 @pytest.fixture
-def target_host():
-    return "docker.host.internal"
+def target_a():
+    target_host = {"target_a": {"ansible_host": "localhost", "ansible_port": "8888", "ansible_ssh_user": "root"}}
+    return target_host
+
+@pytest.fixture
+def target_b():
+    target_host = {"target_b": {"ansible_host": "localhost", "ansible_port": "9999", "ansible_ssh_user": "root"}}
+    return target_host
 
 
 @pytest.fixture(scope="function", params=APIS)

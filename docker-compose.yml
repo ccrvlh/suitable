@@ -1,12 +1,21 @@
 version: '3'
 services:
-  host:
-    build: .
+  # host:
+  #   build: .
+  #   depends_on:
+  #     - target1
+  #     - target2
+  #   volumes:
+  #     - .:/suitable
   target1:
-    image: rastasheep/ubuntu-sshd:18.04
+    build:
+      context: .
+      dockerfile: Dockerfile.target 
     ports:
       - "9999:22"
   target2:
-    image: rastasheep/ubuntu-sshd:18.04
+    build:
+      context: .
+      dockerfile: Dockerfile.target 
     ports:
       - "8888:22"

@@ -15,56 +15,56 @@ from suitable.results import RunnerResults
 from suitable.compat import text_type
 
 
-def test_auto_localhost(target_host):
-    host = Api(target_host)
+def test_auto_localhost():
+    host = Api("localhost")
     assert host.inventory['localhost']['ansible_connection'] == 'local'
 
-    host = Api(target_host, connection='smart')
-    assert 'ansible_connection' not in host.inventory['localhost']
+
+def test_auto_localhost_different_port():
+    host = Api("localhost:8888")
+    assert host.inventory['localhost:8888']['ansible_host'] == 'localhost'
+    assert host.inventory['localhost:8888']['ansible_port'] == 8888
+
+
+def test_smart_connection(target_a):
+    host = Api(target_a, connection='smart')
+    assert 'ansible_connection' not in host.inventory['target_a']
     assert host.options.connection == 'smart'
 
 
-def test_sudo(target_host):
-    host = Api(target_host, sudo=True)
+def test_sudo(target_a):
+    host = Api(target_a, sudo=True)
     try:
         assert host.command('whoami').stdout() == 'root'
     except ModuleError as e:
         assert 'password' in e.result['module_stderr']
 
 
-def test_module_args(target_host):
+def test_module_args(target_a):
     upgrade = (
         'apt-get upgrade -y -o Dpkg::Options::="--force-confdef" '
         '-o Dpkg::Options::="--force-confold"'
     )
 
     try:
-        Api(target_host).command(upgrade)
+        Api(target_a).command(upgrade)
     except ModuleError as e:
         assert e.result['invocation']['module_args']['_raw_params'] == upgrade
 
 
-def test_results(target_host):
-    result = Api(target_host).command('whoami')
-    assert result.rc('localhost') == 0
-    assert result.stdout('localhost') is not None
-    assert result['contacted']['localhost']['rc'] == 0
+def test_results(target_a):
+    result = Api(target_a).command('whoami')
+    assert result.rc('target_a') == 0
+    assert result.stdout('target_a') is not None
+    assert result['contacted']['target_a']['rc'] == 0
 
     with pytest.raises(AttributeError):
-        result.asdf('localhost')
+        result.asdf('target_a')
 
     result['contacted'] = []
 
     with pytest.raises(KeyError):
-        result.rc('localhost')
-
-
-@pytest.mark.parametrize("server", ('localhost',))
-def test_results_single_server(server):
-    result = Api(server).command('whoami')
-    assert result.rc() == 0
-    assert result.rc(server) == 0
-
+        result.rc('target_a')
 
 def test_results_multiple_servers():
     result = RunnerResults({
@@ -81,16 +81,10 @@ def test_results_multiple_servers():
     assert result.rc('db.seantis.dev') == 1
 
 
-@pytest.mark.parametrize("server", (('localhost', 'localhost:22'),))
-def test_whoami_multiple_servers(server):
-    host = Api(server)
-    results = host.command('whoami')
-    assert results.rc(server[0]) == 0
-    assert results.rc(server[1]) == 0
 
 
-def test_valid_return_codes(target_host):
-    host = Api(target_host)
+def test_valid_return_codes(target_a):
+    host = Api(target_a)
     assert host._valid_return_codes == (0,)
 
     with host.valid_return_codes(0, 1):
@@ -112,10 +106,10 @@ def test_list_ansible_modules():
     assert 'setup' in modules
 
 
-def test_module_error(target_host):
+def test_module_error(target_a):
     with pytest.raises(ModuleError):
         # command cannot include pipes
-        Api(target_host).command('whoami | less')
+        Api(target_a).command('whoami | less')
 
 
 @pytest.mark.parametrize("server", ('255.255.255.255', '255.255.255.255:22'))
@@ -182,17 +176,17 @@ def test_custom_unreachable_default():
     assert len(host.unreachable) == 1
 
 
-def test_ignore_errors(target_host):
-    host = Api(target_host, ignore_errors=True)
+def test_ignore_errors(target_a):
+    host = Api(target_a, ignore_errors=True)
     result = host.command('whoami | less')
 
     assert result.rc() == 1
     assert result.cmd() == ['whoami', '|', 'less']
 
 
-def test_error_string(target_host):
+def test_error_string(target_a):
     try:
-        Api(target_host).command('whoami | less')
+        Api(target_a).command('whoami | less')
     except ModuleError as e:
         # we don't have a msg so we mock that out, for coverage!
         e.result['msg'] = '0xdeadbeef'
@@ -209,56 +203,20 @@ def test_error_string(target_host):
         assert False, "this needs to trigger an exception"
 
 
-def test_escaping(tempdir, target_host):
-    special_dir = os.path.join(tempdir, 'special dir with "-char')
-    os.mkdir(special_dir)
-
-    api = Api(target_host)
-    api.file(
-        dest=os.path.join(special_dir, 'foo.txt'),
-        state='touch'
-    )
-
-
-def test_extra_vars(tempdir, target_host):
-    api = Api(target_host, extra_vars={'path': tempdir})
-    api.file(dest="{{ path }}/foo.txt", state='touch')
-
-    assert os.path.exists(tempdir + '/foo.txt')
-
-
-def test_environment(target_host):
-    api = Api(target_host, environment={'FOO': 'BAR'})
+def test_environment(target_a):
+    api = Api(target_a, environment={'FOO': 'BAR'})
     assert api.shell('echo $FOO').stdout() == 'BAR'
 
     api.environment['FOO'] = 'BAZ'
     assert api.shell('echo $FOO').stdout() == 'BAZ'
 
 
-def test_same_server_multiple_ports(target_host):
-    api = Api((target_host, target_host + ':8888'))
-    assert len(api.inventory) == 2
-
-    # Ansible groups these calls, so we only get one result back
-    result = api.command('whoami')
-    assert len(result['contacted']) == 2
-
-
 def test_single_display_module():
     assert sum(1 for obj in gc.get_objects() if isinstance(obj, Display)) == 1
 
 
-# @pytest.mark.skipif(not is_mitogen_supported(), reason="incompatible mitogen")
-# def test_mitogen_integration():
-#     try:
-#         result = MitogenApi(target_host).command('whoami')
-#         assert len(result['contacted']) == 1
-#     except SystemExit:
-#         pass
-
-
-def test_list_args(target_host):
-    api = Api(target_host)
+def test_list_args(target_a):
+    api = Api(target_a)
 
     # api.assert is not valid Python syntax
     getattr(api, 'assert')(that=[
@@ -267,9 +225,61 @@ def test_list_args(target_host):
     ])
 
 
-def test_dict_args(tempdir, target_host):
-    api = Api(target_host)
+def test_dict_args(tempdir, target_a):
+    api = Api(target_a)
     api.set_stats(data={'foo': 'bar'})
+
+
+# @pytest.mark.parametrize("server", ('target_a',))
+# def test_results_single_server(server):
+#     result = Api(server).command('whoami')
+#     assert result.rc() == 0
+#     assert result.rc(server) == 0
+
+
+# @pytest.mark.parametrize("server", (('localhost', 'localhost:22'),))
+# def test_whoami_multiple_servers(server):
+#     host = Api(server)
+#     results = host.command('whoami')
+#     assert results.rc(server[0]) == 0
+#     assert results.rc(server[1]) == 0
+
+
+# def test_escaping(tempdir, target_a):
+#     special_dir = os.path.join(tempdir, 'special dir with "-char')
+#     os.mkdir(special_dir)
+
+#     api = Api(target_a, sudo=True)
+#     api.file(
+#         dest=os.path.join(special_dir, 'foo.txt'),
+#         state='touch'
+#     )
+
+
+# def test_extra_vars(tempdir, target_a):
+#     api = Api(target_a, extra_vars={'path': tempdir})
+#     api.file(dest="{{ path }}/foo.txt", state='touch')
+
+#     assert os.path.exists(tempdir + '/foo.txt')
+
+
+# def test_same_server_multiple_ports(target_a, target_b):
+#     api = Api((target_a, target_b))
+#     assert len(api.inventory) == 2
+
+#     # Ansible groups these calls, so we only get one result back
+#     result = api.command('whoami')
+#     assert len(result['contacted']) == 2
+
+# @pytest.mark.skipif(not is_mitogen_supported(), reason="incompatible mitogen")
+# def test_mitogen_integration():
+#     try:
+#         result = MitogenApi(target_a).command('whoami')
+#         assert len(result['contacted']) == 1
+#     except SystemExit:
+#         pass
+
+
 
 
 # def test_disable_hostkey_checking(api):
@@ -280,16 +290,16 @@ def test_dict_args(tempdir, target_host):
 #     assert api.command('whoami').stdout() == 'root'
 
 
-def test_enable_hostkey_checking_vanilla(container):
-    # if we do not use 'paramiko' here, we get the following error:
-    # > Using a SSH password instead of a key is not possible because Host Key
-    # > checking is enabled and sshpass does not support this.
-    # > Please add this host's fingerprint to your known_hosts file to
-    # > manage this host.
-    api = container.vanilla_api(connection='paramiko')
+# def test_enable_hostkey_checking_vanilla(container):
+#     # if we do not use 'paramiko' here, we get the following error:
+#     # > Using a SSH password instead of a key is not possible because Host Key
+#     # > checking is enabled and sshpass does not support this.
+#     # > Please add this host's fingerprint to your known_hosts file to
+#     # > manage this host.
+#     api = container.vanilla_api(connection='paramiko')
 
-    with pytest.raises(UnreachableError):
-        assert api.command('whoami').stdout() == 'root'
+#     with pytest.raises(UnreachableError):
+#         assert api.command('whoami').stdout() == 'root'
 
 
 # def test_interleaving(container):

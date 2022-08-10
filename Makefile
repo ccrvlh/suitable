@@ -3,5 +3,5 @@ old_test:
 	docker run --rm --name suitable_runtest_instance suitable_test_image
 
 test:
-	docker-compose up
+	docker-compose up --build --force-recreate
 	
