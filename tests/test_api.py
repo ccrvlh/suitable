@@ -15,37 +15,37 @@ from suitable.results import RunnerResults
 from suitable.compat import text_type
 
 
-def test_auto_localhost():
-    host = Api('localhost')
+def test_auto_localhost(target_host):
+    host = Api(target_host)
     assert host.inventory['localhost']['ansible_connection'] == 'local'
 
-    host = Api('localhost', connection='smart')
+    host = Api(target_host, connection='smart')
     assert 'ansible_connection' not in host.inventory['localhost']
     assert host.options.connection == 'smart'
 
 
-def test_sudo():
-    host = Api('localhost', sudo=True)
+def test_sudo(target_host):
+    host = Api(target_host, sudo=True)
     try:
         assert host.command('whoami').stdout() == 'root'
     except ModuleError as e:
         assert 'password' in e.result['module_stderr']
 
 
-def test_module_args():
+def test_module_args(target_host):
     upgrade = (
         'apt-get upgrade -y -o Dpkg::Options::="--force-confdef" '
         '-o Dpkg::Options::="--force-confold"'
     )
 
     try:
-        Api('localhost').command(upgrade)
+        Api(target_host).command(upgrade)
     except ModuleError as e:
         assert e.result['invocation']['module_args']['_raw_params'] == upgrade
 
 
-def test_results():
-    result = Api('localhost').command('whoami')
+def test_results(target_host):
+    result = Api(target_host).command('whoami')
     assert result.rc('localhost') == 0
     assert result.stdout('localhost') is not None
     assert result['contacted']['localhost']['rc'] == 0
@@ -89,8 +89,8 @@ def test_whoami_multiple_servers(server):
     assert results.rc(server[1]) == 0
 
 
-def test_valid_return_codes():
-    host = Api('localhost')
+def test_valid_return_codes(target_host):
+    host = Api(target_host)
     assert host._valid_return_codes == (0,)
 
     with host.valid_return_codes(0, 1):
@@ -112,10 +112,10 @@ def test_list_ansible_modules():
     assert 'setup' in modules
 
 
-def test_module_error():
+def test_module_error(target_host):
     with pytest.raises(ModuleError):
         # command cannot include pipes
-        Api('localhost').command('whoami | less')
+        Api(target_host).command('whoami | less')
 
 
 @pytest.mark.parametrize("server", ('255.255.255.255', '255.255.255.255:22'))
@@ -182,17 +182,17 @@ def test_custom_unreachable_default():
     assert len(host.unreachable) == 1
 
 
-def test_ignore_errors():
-    host = Api('localhost', ignore_errors=True)
+def test_ignore_errors(target_host):
+    host = Api(target_host, ignore_errors=True)
     result = host.command('whoami | less')
 
     assert result.rc() == 1
     assert result.cmd() == ['whoami', '|', 'less']
 
 
-def test_error_string():
+def test_error_string(target_host):
     try:
-        Api('localhost').command('whoami | less')
+        Api(target_host).command('whoami | less')
     except ModuleError as e:
         # we don't have a msg so we mock that out, for coverage!
         e.result['msg'] = '0xdeadbeef'
@@ -209,34 +209,34 @@ def test_error_string():
         assert False, "this needs to trigger an exception"
 
 
-def test_escaping(tempdir):
+def test_escaping(tempdir, target_host):
     special_dir = os.path.join(tempdir, 'special dir with "-char')
     os.mkdir(special_dir)
 
-    api = Api('localhost')
+    api = Api(target_host)
     api.file(
         dest=os.path.join(special_dir, 'foo.txt'),
         state='touch'
     )
 
 
-def test_extra_vars(tempdir):
-    api = Api('localhost', extra_vars={'path': tempdir})
+def test_extra_vars(tempdir, target_host):
+    api = Api(target_host, extra_vars={'path': tempdir})
     api.file(dest="{{ path }}/foo.txt", state='touch')
 
     assert os.path.exists(tempdir + '/foo.txt')
 
 
-def test_environment():
-    api = Api('localhost', environment={'FOO': 'BAR'})
+def test_environment(target_host):
+    api = Api(target_host, environment={'FOO': 'BAR'})
     assert api.shell('echo $FOO').stdout() == 'BAR'
 
     api.environment['FOO'] = 'BAZ'
     assert api.shell('echo $FOO').stdout() == 'BAZ'
 
 
-def test_same_server_multiple_ports():
-    api = Api(('localhost', 'localhost:22'))
+def test_same_server_multiple_ports(target_host):
+    api = Api((target_host, target_host + ':8888'))
     assert len(api.inventory) == 2
 
     # Ansible groups these calls, so we only get one result back
@@ -251,14 +251,14 @@ def test_single_display_module():
 # @pytest.mark.skipif(not is_mitogen_supported(), reason="incompatible mitogen")
 # def test_mitogen_integration():
 #     try:
-#         result = MitogenApi('localhost').command('whoami')
+#         result = MitogenApi(target_host).command('whoami')
 #         assert len(result['contacted']) == 1
 #     except SystemExit:
 #         pass
 
 
-def test_list_args():
-    api = Api('localhost')
+def test_list_args(target_host):
+    api = Api(target_host)
 
     # api.assert is not valid Python syntax
     getattr(api, 'assert')(that=[
@@ -267,17 +267,17 @@ def test_list_args():
     ])
 
 
-def test_dict_args(tempdir):
-    api = Api('localhost')
+def test_dict_args(tempdir, target_host):
+    api = Api(target_host)
     api.set_stats(data={'foo': 'bar'})
 
 
-def test_disable_hostkey_checking(api):
-    api.host_key_checking = False
-    print(type(api))
-    print(api)
-    print(api.inventory)
-    assert api.command('whoami').stdout() == 'root'
+# def test_disable_hostkey_checking(api):
+#     api.host_key_checking = False
+#     print(type(api))
+#     print(api)
+#     print(api.inventory)
+#     assert api.command('whoami').stdout() == 'root'
 
 
 def test_enable_hostkey_checking_vanilla(container):
@@ -292,26 +292,26 @@ def test_enable_hostkey_checking_vanilla(container):
         assert api.command('whoami').stdout() == 'root'
 
 
-def test_interleaving(container):
-    # make sure we can interleave calls of different API objects
-    password = crypt("foobar", "salt")
+# def test_interleaving(container):
+#     # make sure we can interleave calls of different API objects
+#     password = crypt("foobar", "salt")
 
-    root = container.vanilla_api(connection='paramiko')
-    root.host_key_checking = False
+#     root = container.vanilla_api(connection='paramiko')
+#     root.host_key_checking = False
 
-    root.command('useradd --non-unique --uid 0 foo -p ' + password)
-    root.command('useradd --non-unique --uid 0 bar -p ' + password)
+#     root.command('useradd --non-unique --uid 0 foo -p ' + password)
+#     root.command('useradd --non-unique --uid 0 bar -p ' + password)
 
-    foo = container.vanilla_api(
-        connection='paramiko', remote_user='foo', remote_pass='foobar')
-    bar = container.vanilla_api(
-        connection='paramiko', remote_user='bar', remote_pass='foobar')
+#     foo = container.vanilla_api(
+#         connection='paramiko', remote_user='foo', remote_pass='foobar')
+#     bar = container.vanilla_api(
+#         connection='paramiko', remote_user='bar', remote_pass='foobar')
 
-    foo.host_key_checking = False
-    bar.host_key_checking = False
+#     foo.host_key_checking = False
+#     bar.host_key_checking = False
 
-    assert foo.command('id -g').stdout() == '1000'
-    assert bar.command('id -g').stdout() == '1001'
+#     assert foo.command('id -g').stdout() == '1000'
+#     assert bar.command('id -g').stdout() == '1001'
 
-    assert foo.command('id -g').stdout() == '1000'
-    assert bar.command('id -g').stdout() == '1001'
+#     assert foo.command('id -g').stdout() == '1000'
+#     assert bar.command('id -g').stdout() == '1001'

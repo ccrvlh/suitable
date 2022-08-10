@@ -1,8 +1,12 @@
 version: '3'
 services:
-  # host:
-  #   build: .
-  target:
+  host:
+    build: .
+  target1:
     image: rastasheep/ubuntu-sshd:18.04
     ports:
-      - "2222:22"
+      - "9999:22"
+  target2:
+    image: rastasheep/ubuntu-sshd:18.04
+    ports:
+      - "8888:22"

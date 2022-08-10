@@ -7,7 +7,7 @@ RUN set -e && \
     apt-get update && \
     apt-get upgrade -y && \
     apt-get install -y \
-    wget ssh software-properties-common && \
+    wget ssh software-properties-common sshpass && \
     add-apt-repository ppa:deadsnakes/ppa && \
     apt-get update
 
@@ -37,4 +37,4 @@ RUN set -e && \
 COPY . /suitable
 WORKDIR /suitable
 
-CMD ["tox","-e","py27-a24,py35-a24,py27-a28,py35-a28"]
+CMD ["tox","-e","py35-a28"]

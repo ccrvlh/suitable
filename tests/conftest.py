@@ -74,9 +74,13 @@ def container():
 #         'rastasheep/ubuntu-sshd:18.04'
 #     ))
 
-    yield Container('localhost', "2222", 'root', 'root')
+    yield Container('docker.host.internal', "9999", 'root', 'root')
 
 #     subprocess.call(('docker', 'stop', name))
+
+@pytest.fixture
+def target_host():
+    return "docker.host.internal"
 
 
 @pytest.fixture(scope="function", params=APIS)
