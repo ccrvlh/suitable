@@ -152,6 +152,7 @@ class Api(object):
         options = self._set_default_options(options, verbosity, dry_run)
         options = self._set_options_passwords(options)
         self.options = options_as_class(options)
+        self._hook_modules()
 
     def _hook_modules(self):
         """

@@ -13,20 +13,22 @@ RUN set -e && \
 
 RUN apt-get -y install \
     python2.7 \
-    python3.5 \
-    python3.6 \
-    python3.7 \
-    python3.8 \
-    python3.9 \
-    python3.10 \
     python-pip \
-    python3-pip3 \
+    python-dev \
+    python3.5 \
+    python3-pip \
+    python3-dev \
+    libpython3.5-dev \
+    python3.6 \
+    libpython3.6-dev \
+    python3.7 \
+    libpython3.7-dev \
     libffi-dev \
     libvirt-dev && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip3 install --upgrade pip3 && \
+RUN python3 -m pip install --upgrade pip && \
     python -m pip install --upgrade pip
 
 RUN set -e && \
@@ -35,4 +37,4 @@ RUN set -e && \
 COPY . /suitable
 WORKDIR /suitable
 
-CMD ["tox","-a"]
+CMD ["tox","-e","py27-a24,py35-a24,py27-a28,py35-a28"]

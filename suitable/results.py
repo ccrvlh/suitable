@@ -59,7 +59,7 @@ class RunnerResults(dict):
         Returns:
             t.Any: ...
         """
-        contacted_servers: dict = self['contacted']
+        contacted_servers = self['contacted'] # type: dict
         if server is None and len(contacted_servers) == 1:
             server = next((k for k in contacted_servers.keys()), None)
 

@@ -26,20 +26,28 @@ class Container(object):
 
     def spawn_api(self, api_class, **kwargs):
         options = {
-            'remote_user': self.username,
-            'remote_pass': self.password,
             'connection': 'smart',
             'extra_vars': {
                 'ansible_python_interpreter': '/usr/bin/python3'
             }
         }
 
-        options.update(kwargs)
+        hosts = {
+                "suitable": {
+                    "ansible_host": self.host,
+                    "ansible_port": self.port,
+                    "ansible_ssh_user": self.username,
+                    "ansible_ssh_pass": self.password,
+               }
+            }
 
-        return api_class(
-            '%s:%s' % (self.host, self.port),
-            ** options
-        )
+        options.update(kwargs)
+        api_instance = api_class(servers=hosts, verbosity="info", options=options)
+        return api_instance
+        # return api_class(
+        #     '%s:%s' % (self.host, self.port),
+        #     ** options
+        # )
 
     def vanilla_api(self, **kwargs):
         return self.spawn_api(Api, **kwargs)
@@ -57,18 +65,18 @@ def tempdir():
 
 @pytest.fixture(scope="function")
 def container():
-    port = port_for.select_random()
-    name = 'suitable-container-%s' % uuid4().hex
+#     port = port_for.select_random()
+#     name = 'suitable-container-%s' % uuid4().hex
 
-    subprocess.check_call((
-        'docker', 'run', '-d', '--rm', '-it', '--name', name,
-        '-p', '127.0.0.1:%d:22/tcp' % port,
-        'rastasheep/ubuntu-sshd:18.04'
-    ))
+#     subprocess.check_call((
+#         'docker', 'run', '-d', '--rm', '-it', '--name', name,
+#         '-p', 'localhost:%d:2222/tcp' % port,
+#         'rastasheep/ubuntu-sshd:18.04'
+#     ))
 
-    yield Container('127.0.0.1', port, 'root', 'root')
+    yield Container('localhost', "2222", 'root', 'root')
 
-    subprocess.call(('docker', 'stop', name))
+#     subprocess.call(('docker', 'stop', name))
 
 
 @pytest.fixture(scope="function", params=APIS)

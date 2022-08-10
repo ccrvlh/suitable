@@ -1,11 +1,16 @@
+from __main__ import display
+
 import logging
 import os
 import typing as t
+import ansible.constants
 
+from contextlib import contextmanager
 from ansible.plugins.loader import module_loader
 from ansible.plugins.loader import strategy_loader
 
 log = logging.getLogger('suitable')
+
 
 VERBOSITY = {
     'critical': logging.CRITICAL,
@@ -97,6 +102,60 @@ def get_modules_from_path(path):
                 yield module
         else:
             yield os.path.splitext(name)[0]
+
+
+@contextmanager
+def ansible_verbosity(verbosity):
+    # type: (int) -> t.Generator[None, None, None]
+    """
+    Temporarily changes the ansible verbosity. Relies on a single display
+    instance being referenced by the __main__ module.
+
+    This is setup when suitable is imported, though Ansible could already
+    be imported beforehand, in which case the output might not be as verbose
+    as expected.
+
+    To be sure, import suitable before importing ansible. ansible.
+
+    """
+    previous = display.verbosity
+    display.verbosity = verbosity
+    yield
+    display.verbosity = previous
+
+
+@contextmanager
+def environment_variable(key, value):
+    # type: (str, t.Any) -> t.Iterator[t.Any]
+    """ Temporarily overrides an environment variable. """
+
+    previous = None
+    if key in os.environ:
+        previous = os.environ[key]
+    os.environ[key] = value
+
+    yield
+
+    if previous is None:
+        del os.environ[key]
+    else:
+        os.environ[key] = previous
+
+
+@contextmanager
+def host_key_checking(enable):
+    # type: (bool) -> t.Iterator[t.Any]
+    """ Temporarily disables host_key_checking, which is set globally. """
+
+    def as_string(b):
+        return b and 'True' or 'False'
+
+    with environment_variable('ANSIBLE_HOST_KEY_CHECKING', as_string(enable)):
+        previous = ansible.constants.HOST_KEY_CHECKING
+        ansible.constants.HOST_KEY_CHECKING = enable
+        yield
+        ansible.constants.HOST_KEY_CHECKING = previous
+
 
 
 log.addHandler(NullHandler())

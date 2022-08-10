@@ -6,9 +6,7 @@ import os
 import signal
 import sys
 import typing as t
-import ansible.constants
 
-from contextlib import contextmanager
 from datetime import datetime
 from pprint import pformat
 
@@ -18,9 +16,13 @@ from ansible.parsing.dataloader import DataLoader
 from ansible.playbook.play import Play
 from ansible.vars.manager import VariableManager
 
-from suitable.callback import SilentCallbackModule
-from suitable.utils import log
+from suitable.callback import SilentCallbackModule, ResultsCollectorJSONCallback
+from suitable.inventory import SourcelessInventoryManager
 from suitable.results import RunnerResults
+from suitable.utils import ansible_verbosity
+from suitable.utils import host_key_checking
+from suitable.utils import log
+
 
 try:
     from ansible import context
@@ -32,72 +34,6 @@ else:
 
 if t.TYPE_CHECKING:
     from suitable.api import Api
-
-
-@contextmanager
-def ansible_verbosity(verbosity):
-    # type: (int) -> t.Generator[None, None, None]
-    """
-    Temporarily changes the ansible verbosity. Relies on a single display
-    instance being referenced by the __main__ module.
-
-    This is setup when suitable is imported, though Ansible could already
-    be imported beforehand, in which case the output might not be as verbose
-    as expected.
-
-    To be sure, import suitable before importing ansible. ansible.
-
-    """
-    previous = display.verbosity
-    display.verbosity = verbosity
-    yield
-    display.verbosity = previous
-
-
-@contextmanager
-def environment_variable(key, value):
-    # type: (str, t.Any) -> t.Iterator[t.Any]
-    """ Temporarily overrides an environment variable. """
-
-    previous = None
-    if key in os.environ:
-        previous = os.environ[key]
-    os.environ[key] = value
-
-    yield
-
-    if previous is None:
-        del os.environ[key]
-    else:
-        os.environ[key] = previous
-
-
-@contextmanager
-def host_key_checking(enable):
-    # type: (bool) -> t.Iterator[t.Any]
-    """ Temporarily disables host_key_checking, which is set globally. """
-
-    def as_string(b):
-        return b and 'True' or 'False'
-
-    with environment_variable('ANSIBLE_HOST_KEY_CHECKING', as_string(enable)):
-        previous = ansible.constants.HOST_KEY_CHECKING
-        ansible.constants.HOST_KEY_CHECKING = enable
-        yield
-        ansible.constants.HOST_KEY_CHECKING = previous
-
-
-class SourcelessInventoryManager(InventoryManager):
-    """
-    A custom inventory manager that turns the source parsing into a noop.
-
-    Without this, Ansible will warn that there are no inventory sources that
-    could be parsed. Naturally we do not have such sources, rendering this
-    warning moot.
-    """
-
-    def parse_sources(self, *args, **kwargs):
-        pass
 
 
 class ModuleRunner(object):
@@ -167,48 +103,114 @@ class ModuleRunner(object):
 
         return u' '.join((args, kwargs)).strip()
 
-    def _build_play_source(self, module_args):
-        # type: (str) -> dict[str, t.Any]
-        if self.api is None:
-            raise ValueError('API must be hooked up')
-
-        play_source = {
-            'name': "Suitable Play",
-            'hosts': 'all',
-            'gather_facts': 'no',
-            'tasks': [{
-                'action': {
-                    'module': self.module_name,
-                    'args': module_args,
-                },
-                'environment': self.api.environment,
-            }]
-        }
-        return play_source
-
-    def _build_inventory_manager(self, loader):
-        # type: (DataLoader) -> InventoryManager
+    def ignore_further_calls_to_server(self, server):
+        # type: (str) -> None
         """
-        Given the API Inventoy, builds Ansible's InventoryManager.
-        It will iterate the inventory, add hosts to the manager and set variables
-        for each of the hosts.
+        Ignore further calls to the given server.
+
+        Args:
+            server (str): The server to ignore.
+        """
+        if not self.api:
+            raise AttributeError('The API is not yet hooked up')
+        log.error(u'ignoring further calls to {}'.format(server))
+        del self.api.inventory[server]
+
+    def trigger_event(self, server, method, args):
+        # type: (str, str, tuple[t.Any, ...]) -> None
+        """
+        Trigers an event based based on the server and method.
+
+        Args:
+            server (str): The server to trigger the event on.
+            method (str): The method to trigger the event on.
+            args (tuple[t.Any, ...]): Arguments
+        """        
+        try:
+            action = getattr(self.api, method)(*args)
+            if action != 'keep-trying':
+                self.ignore_further_calls_to_server(server)
+
+        except Exception:
+            self.ignore_further_calls_to_server(server)
+            raise
+
+    def evaluate_results(self, callback):
+        # type: (SilentCallbackModule) -> RunnerResults
+        """
+        Prepare the result of runner call for use with RunnerResults.
+        If none of the modules in our tests hit the 'failed' result
+        codepath (which seems to not be implemented by all modules)
+        so we ignore this branch since it's rather trivial.
+
+        Review RunnerResults:
+        This is a weird structure because RunnerResults still works
+        like it did with Ansible 1.x, where the results where structured
+        like this.
+
+        Args:
+            callback (SilentCallbackModule): The callback to use.
+
+        Raises:
+            AttributeError: If the API is not hooked up
 
         Returns:
-            _type_: _description_
-        """        
+            RunnerResults: A RunnerResults (dict) instance.
+        """
         if not self.api:
-            raise AttributeError("Can't build inventory. The API is not hooked up.")
-        
-        inventory_manager = SourcelessInventoryManager(loader=loader)
-        for host, host_variables in self.api.inventory.items():
-            inventory_manager._inventory.add_host(host, group='all')
-            for key, value in host_variables.items():
-                inventory_manager._inventory.set_variable(host, key, value)
+            raise AttributeError('The API is not yet hooked up')
 
-        for key, value in self.api.options.extra_vars.items():
-            inventory_manager._inventory.set_variable('all', key, value)
+        contacted_servers = callback.contacted # type: dict[str, t.Any]
+        unreacheable_servers = callback.unreachable # type: dict[str, t.Any]
 
-        return inventory_manager
+        for server, result in unreacheable_servers.items():
+            log.error(u'{} could not be reached'.format(server))
+            log.debug(u'ansible-output =>\n{}'.format(pformat(result)))
+
+            if self.api.ignore_unreachable:
+                continue
+
+            self.trigger_event(server, 'on_unreachable_host', (
+                self, server
+            ))
+
+        for server, answer in contacted_servers.items():
+            success = answer['success'] # type: bool
+            result = answer['result'] # type: dict[t.Any, t.Any]
+
+            if result.get('failed'):  # pragma: no cover
+                success = False
+
+            if 'rc' in result:
+                if self.api.is_valid_return_code(result['rc']):
+                    success = True
+
+            result['success'] = success
+            if success:
+                continue
+
+            log.error(u'{} failed on {}'.format(self, server))
+            log.debug(u'ansible-output =>\n{}'.format(pformat(result)))
+
+            if self.api.ignore_errors:
+                continue
+
+            self.trigger_event(server, 'on_module_error', (
+                self, server, result
+            ))
+
+        results = RunnerResults({
+            'contacted': {
+                server: answer['result']
+                for server, answer in contacted_servers.items()
+            },
+            'unreachable': {
+                server: result
+                for server, result in unreacheable_servers.items()
+            }
+        })
+
+        return results
 
     def execute(self, *args, **kwargs):
         """
@@ -284,33 +286,32 @@ class ModuleRunner(object):
 
         try:
             verbosity = self.api.options.verbosity == logging.DEBUG and 6 or 0
-            with ansible_verbosity(verbosity):
-                with host_key_checking(self.api.host_key_checking):
-                    kwargs = dict(
-                        inventory=inventory_manager,
-                        variable_manager=variable_manager,
-                        loader=loader,
-                        options=self.api.options,
-                        passwords=getattr(self.api.options, 'passwords', {}),
-                        stdout_callback=callback
-                    )
+            previous_verbosity = display.verbosity
+            display.verbosity = verbosity
 
-                    if set_global_context:
-                        del kwargs['options']
+            with host_key_checking(self.api.host_key_checking):
+                kwargs = dict(
+                    inventory=inventory_manager,
+                    variable_manager=variable_manager,
+                    loader=loader,
+                    options=self.api.options,
+                    passwords=getattr(self.api.options, 'passwords', {}),
+                    stdout_callback=callback
+                )
 
-                    task_queue_manager = TaskQueueManager(**kwargs)
+                if set_global_context:
+                    del kwargs['options']
 
-                    try:
-                        task_queue_manager.run(play)
-                    except SystemExit:
-                        if 'pytest' in sys.modules:
-                            try:
-                                atexit._run_exitfuncs()
-                            except Exception:
-                                pass
-                            os.kill(os.getpid(), signal.SIGKILL)
+                task_queue_manager = TaskQueueManager(**kwargs)
 
-                        raise
+                try:
+                    r = task_queue_manager.run(play)
+                except SystemExit:
+                    self._kill_all()
+                    raise
+
+            display.verbosity = previous_verbosity
+
         finally:
             if task_queue_manager is not None:
                 task_queue_manager.cleanup()
@@ -322,110 +323,53 @@ class ModuleRunner(object):
         log.debug(u'took {} to complete'.format(datetime.utcnow() - start))
         return self.evaluate_results(callback)
 
-    def ignore_further_calls_to_server(self, server: str):
+    def _build_play_source(self, module_args):
+        # type: (str) -> dict[str, t.Any]
+        if self.api is None:
+            raise ValueError('API must be hooked up')
+
+        play_source = {
+            'name': "Suitable Play",
+            'hosts': 'all',
+            'gather_facts': 'no',
+            'tasks': [{
+                'action': {
+                    'module': self.module_name,
+                    'args': module_args,
+                },
+                'environment': self.api.environment,
+            }]
+        }
+        return play_source
+
+    def _build_inventory_manager(self, loader):
+        # type: (DataLoader) -> InventoryManager
         """
-        Ignore further calls to the given server.
-
-        Args:
-            server (str): The server to ignore.
-        """
-        if not self.api:
-            raise AttributeError('The API is not yet hooked up')
-        log.error(u'ignoring further calls to {}'.format(server))
-        del self.api.inventory[server]
-
-    def trigger_event(self, server, method, args):
-        # type: (str, str, tuple[t.Any, ...]) -> None
-        """
-        Trigers an event based based on the server and method.
-
-        Args:
-            server (str): The server to trigger the event on.
-            method (str): The method to trigger the event on.
-            args (tuple[t.Any, ...]): Arguments
-        """        
-        try:
-            action = getattr(self.api, method)(*args)
-            if action != 'keep-trying':
-                self.ignore_further_calls_to_server(server)
-
-        except Exception:
-            self.ignore_further_calls_to_server(server)
-            raise
-
-    def evaluate_results(self, callback):
-        # type: (SilentCallbackModule) -> RunnerResults
-        """
-        Prepare the result of runner call for use with RunnerResults.
-        If none of the modules in our tests hit the 'failed' result
-        codepath (which seems to not be implemented by all modules)
-        so we ignore this branch since it's rather trivial.
-
-        Review RunnerResults:
-        This is a weird structure because RunnerResults still works
-        like it did with Ansible 1.x, where the results where structured
-        like this.
-
-        Args:
-            callback (SilentCallbackModule): The callback to use.
-
-        Raises:
-            AttributeError: If the API is not hooked up
+        Given the API Inventoy, builds Ansible's InventoryManager.
+        It will iterate the inventory, add hosts to the manager and set variables
+        for each of the hosts.
 
         Returns:
-            RunnerResults: A RunnerResults (dict) instance.
-        """
+            _type_: _description_
+        """        
         if not self.api:
-            raise AttributeError('The API is not yet hooked up')
+            raise AttributeError("Can't build inventory. The API is not hooked up.")
+        
+        inventory_manager = SourcelessInventoryManager(loader=loader)
+        for host, host_variables in self.api.inventory.items():
+            inventory_manager._inventory.add_host(host, group='all')
+            for key, value in host_variables.items():
+                inventory_manager._inventory.set_variable(host, key, value)
 
-        contacted_servers: dict[str, t.Any] = callback.contacted
-        unreacheable_servers: dict[str, t.Any] = callback.unreachable
+        for key, value in self.api.options.extra_vars.items():
+            inventory_manager._inventory.set_variable('all', key, value)
 
-        for server, result in unreacheable_servers.items():
-            log.error(u'{} could not be reached'.format(server))
-            log.debug(u'ansible-output =>\n{}'.format(pformat(result)))
+        return inventory_manager
 
-            if self.api.ignore_unreachable:
-                continue
-
-            self.trigger_event(server, 'on_unreachable_host', (
-                self, server
-            ))
-
-        for server, answer in contacted_servers.items():
-            success: bool = answer['success']
-            result: dict[t.Any, t.Any] = answer['result'] # type: ignore
-
-            if result.get('failed'):  # pragma: no cover
-                success = False
-
-            if 'rc' in result:
-                if self.api.is_valid_return_code(result['rc']):
-                    success = True
-
-            result['success'] = success
-            if success:
-                continue
-
-            log.error(u'{} failed on {}'.format(self, server))
-            log.debug(u'ansible-output =>\n{}'.format(pformat(result)))
-
-            if self.api.ignore_errors:
-                continue
-
-            self.trigger_event(server, 'on_module_error', (
-                self, server, result
-            ))
-
-        results = RunnerResults({
-            'contacted': {
-                server: answer['result']
-                for server, answer in contacted_servers.items()
-            },
-            'unreachable': {
-                server: result
-                for server, result in unreacheable_servers.items()
-            }
-        })
-
-        return results
+    def _kill_all(self):
+        if 'pytest' in sys.modules:
+            try:
+                atexit._run_exitfuncs()
+            except Exception:
+                pass
+            os.kill(os.getpid(), signal.SIGKILL)

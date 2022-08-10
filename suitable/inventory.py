@@ -1,3 +1,5 @@
+from ansible.inventory.manager import InventoryManager
+
 from suitable.compat import string_types
 
 
@@ -32,9 +34,11 @@ class Inventory(dict):
         # Localhost
         if not self.ansible_connection:
             # Get hostname (either ansible_host or server)
+            is_default_ssh_port = self[server].get('ansible_port', 22) == 22
             host = self[server].get('ansible_host', server)
-            if host in ('localhost', '127.0.0.1', '::1'):
+            if host in ('localhost', '127.0.0.1', '::1') and is_default_ssh_port:
                 self[server]['ansible_connection'] = 'local'
+                print("HERE!!!")
 
     def add_hosts(self, servers):
         # type: (dict) -> None
@@ -47,3 +51,16 @@ class Inventory(dict):
         else:
             for server in servers:
                 self.add_host(server, {})
+
+
+class SourcelessInventoryManager(InventoryManager):
+    """
+    A custom inventory manager that turns the source parsing into a noop.
+
+    Without this, Ansible will warn that there are no inventory sources that
+    could be parsed. Naturally we do not have such sources, rendering this
+    warning moot.
+    """
+
+    def parse_sources(self, *args, **kwargs):
+        pass

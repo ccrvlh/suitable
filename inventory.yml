@@ -1,0 +1,13 @@
+all:
+  hosts:
+    app:
+      ansible_host: localhost
+      ansible_port: 2222
+      ansible_user: root
+      ansible_password: root
+
+
+{'all': {'hosts': {'app': {'ansible_host': 'localhost',
+    'ansible_port': 2222,
+    'ansible_user': 'root',
+    'ansible_password': 'root'}}}}
