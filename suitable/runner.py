@@ -1,25 +1,26 @@
+from __main__ import display
+
 import atexit
-import ansible.constants
 import logging
 import os
 import signal
 import sys
 import typing as t
+import ansible.constants
 
-from __main__ import display
-from ansible.executor.task_queue_manager import TaskQueueManager
-from ansible.parsing.dataloader import DataLoader
-from ansible.inventory.manager import InventoryManager
-from ansible.playbook.play import Play
-from ansible.vars.manager import VariableManager
 from contextlib import contextmanager
 from datetime import datetime
 from pprint import pformat
 
-from suitable.callback import SilentCallbackModule
-from suitable.common import log
-from suitable.runner_results import RunnerResults
+from ansible.executor.task_queue_manager import TaskQueueManager
+from ansible.inventory.manager import InventoryManager
+from ansible.parsing.dataloader import DataLoader
+from ansible.playbook.play import Play
+from ansible.vars.manager import VariableManager
 
+from suitable.callback import SilentCallbackModule
+from suitable.utils import log
+from suitable.results import RunnerResults
 
 try:
     from ansible import context
@@ -58,11 +59,9 @@ def environment_variable(key, value):
     # type: (str, t.Any) -> t.Iterator[t.Any]
     """ Temporarily overrides an environment variable. """
 
-    if key not in os.environ:
-        previous = None
-    else:
+    previous = None
+    if key in os.environ:
         previous = os.environ[key]
-
     os.environ[key] = value
 
     yield
@@ -83,7 +82,6 @@ def host_key_checking(enable):
 
     with environment_variable('ANSIBLE_HOST_KEY_CHECKING', as_string(enable)):
         previous = ansible.constants.HOST_KEY_CHECKING
-
         ansible.constants.HOST_KEY_CHECKING = enable
         yield
         ansible.constants.HOST_KEY_CHECKING = previous
@@ -109,8 +107,6 @@ class ModuleRunner(object):
         """
         Runs any ansible module given the module's name and access
         to the api instance (done through the hookup method).
-
-
         """
         self.module_name = module_name
         self.api = None
@@ -218,6 +214,41 @@ class ModuleRunner(object):
         """
         Puts args and kwargs in a way ansible can understand. Calls ansible
         and interprets the result.
+
+        Note on verbosity:
+        Ansible uses various levels of verbosity (from -v to -vvvvvv)
+        offering various amounts of debug information
+        we keep it a bit simpler by activating all of it during debug,
+        and falling back to the default of 0 otherwises.
+
+        Note on host_key_cheking:
+        host_key_checking is special, since not each connection
+        plugin handles it the same way, we need to apply both
+        environment variable and Ansible constant when running a
+        command in the runner to be successful
+
+        Note on System Exit:
+        Mitogen forks our process and exits it in one
+        instance before returning
+        
+        This is fine, but it does lead to a very messy exit
+        by py.test which will essentially return with a test
+        that is first successful and then failed as each
+        forked process dies.
+        
+        To avoid this we commit suicide if we are run inside
+        a pytest session. Normally this would just result
+        in a exit code of zero, which is good.
+
+        Note on Global Context:
+        Ansible 2.8 introduces a global context which persists
+        during the lifetime of the process - for Suitable this
+        singleton/cache needs to be cleared after each call
+        to make sure that API calls do not carry over state.
+        
+        The docs hint at a future inclusion of local contexts, which
+        would of course be preferable.
+
         """
         # Initialize Execution
         start = datetime.utcnow()
@@ -252,20 +283,8 @@ class ModuleRunner(object):
         )
 
         try:
-
-            # ansible uses various levels of verbosity (from -v to -vvvvvv)
-            # offering various amounts of debug information
-            # we keep it a bit simpler by activating all of it during debug,
-            # and falling back to the default of 0 otherwise
-
             verbosity = self.api.options.verbosity == logging.DEBUG and 6 or 0
             with ansible_verbosity(verbosity):
-
-                # host_key_checking is special, since not each connection
-                # plugin handles it the same way, we need to apply both
-                # environment variable and Ansible constant when running a
-                # command in the runner to be successful
-
                 with host_key_checking(self.api.host_key_checking):
                     kwargs = dict(
                         inventory=inventory_manager,
@@ -284,18 +303,6 @@ class ModuleRunner(object):
                     try:
                         task_queue_manager.run(play)
                     except SystemExit:
-
-                        # Mitogen forks our process and exits it in one
-                        # instance before returning
-                        #
-                        # This is fine, but it does lead to a very messy exit
-                        # by py.test which will essentially return with a test
-                        # that is first successful and then failed as each
-                        # forked process dies.
-                        #
-                        # To avoid this we commit suicide if we are run inside
-                        # a pytest session. Normally this would just result
-                        # in a exit code of zero, which is good.
                         if 'pytest' in sys.modules:
                             try:
                                 atexit._run_exitfuncs()
@@ -309,18 +316,10 @@ class ModuleRunner(object):
                 task_queue_manager.cleanup()
 
             if set_global_context:
-                # Ansible 2.8 introduces a global context which persists
-                # during the lifetime of the process - for Suitable this
-                # singleton/cache needs to be cleared after each call
-                # to make sure that API calls do not carry over state.
-                #
-                # The docs hint at a future inclusion of local contexts, which
-                # would of course be preferable.
                 from ansible.utils.context_objects import GlobalCLIArgs
                 GlobalCLIArgs._Singleton__instance = None
 
         log.debug(u'took {} to complete'.format(datetime.utcnow() - start))
-
         return self.evaluate_results(callback)
 
     def ignore_further_calls_to_server(self, server: str):
@@ -405,16 +404,18 @@ class ModuleRunner(object):
                     success = True
 
             result['success'] = success
-            if not success:
-                log.error(u'{} failed on {}'.format(self, server))
-                log.debug(u'ansible-output =>\n{}'.format(pformat(result)))
+            if success:
+                continue
 
-                if self.api.ignore_errors:
-                    continue
+            log.error(u'{} failed on {}'.format(self, server))
+            log.debug(u'ansible-output =>\n{}'.format(pformat(result)))
 
-                self.trigger_event(server, 'on_module_error', (
-                    self, server, result
-                ))
+            if self.api.ignore_errors:
+                continue
+
+            self.trigger_event(server, 'on_module_error', (
+                self, server, result
+            ))
 
         results = RunnerResults({
             'contacted': {

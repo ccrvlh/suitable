@@ -1,3 +1,3 @@
 test:
-	docker build -t suitable_test_image . && \
+	docker build --platform=linux/amd64 -t suitable_test_image ./tests && \
 	docker run --rm --name suitable_runtest_instance suitable_test_image

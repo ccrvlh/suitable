@@ -5,7 +5,7 @@ import mitogen
 import ansible
 
 from suitable.api import Api as Base
-from suitable.api import install_strategy_plugins
+from suitable.utils import install_strategy_plugins
 
 
 MITOGEN_LOADED = False

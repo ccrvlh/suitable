@@ -1,6 +1,6 @@
 from ansible.plugins.callback import CallbackBase
 
-from suitable.runner_results import RunnerResults
+from suitable.results import RunnerResults
 
 
 class SilentCallbackModule(CallbackBase):

@@ -1,16 +1,15 @@
-import os
 import typing as t
 
 from ansible import constants as C
-from ansible.plugins.loader import module_loader
-from ansible.plugins.loader import strategy_loader
 from contextlib import contextmanager
-from suitable.errors import UnreachableError, ModuleError
-from suitable.module_runner import ModuleRunner
-from suitable.runner_results import RunnerResults
-from suitable.utils import options_as_class, VERBOSITY
+from suitable.errors import UnreachableError
+from suitable.errors import ModuleError
+from suitable.runner import ModuleRunner
+from suitable.results import RunnerResults
+from suitable.utils import list_ansible_modules
+from suitable.utils import options_as_class
+from suitable.utils import VERBOSITY
 from suitable.inventory import Inventory
-
 
 
 class Api(object):
@@ -137,15 +136,53 @@ class Api(object):
             `<http://docs.ansible.com/ansible/developing_api.html>`_
 
         """
-        # Create Inventory
-        self.inventory = Inventory(options.get('connection', None),
-                                   hosts=servers)
+        # Initial Config
+        # Keeps host_key_checking around for the runner
+        self.inventory = Inventory(options.get('connection', None), hosts=servers)
+        self.host_key_checking = host_key_checking
+        self._valid_return_codes = (0, )
+        self.ignore_unreachable = ignore_unreachable
+        self.ignore_errors = ignore_errors
+        self.environment = environment or {}
+        self.strategy = strategy
 
-        # Set connection to smart (if not set by user)
+        # Set Options
+        options = self._set_initial_options(options, sudo)
+        options = self._set_required_options(options)
+        options = self._set_default_options(options, verbosity, dry_run)
+        options = self._set_options_passwords(options)
+        self.options = options_as_class(options)
+
+    def _hook_modules(self):
+        """
+        Hook modules dynamically adds Ansible's modules
+        to the API Class, making it possible to access modules
+        without declaring each on of them here.
+
+        Example::
+
+            >>> ansible = Api(host)
+            >>> ansible.shell("whoami")
+        """        
+        for runner in (ModuleRunner(m) for m in list_ansible_modules()):
+            runner.hookup(self)
+
+    def _set_initial_options(self, options, sudo):
+        """Inital options configuration include:
+            - Setting the connection
+            - Adding a `sudo` shortcut
+            - Asserting `module_path` is not being used (not supported)
+
+        Args:
+            options (dict): The main options dictionary
+            sudo (bool): Whether to use sudo
+
+        Returns:
+            options (dict): the options dictionary
+        """
         if 'connection' not in options:
             options['connection'] = 'smart'
 
-        # sudo is just a shortcut that is easier to remember than this:
         if not ('become' in options or 'become_user' in options):
             options['become'] = sudo
             options['become_user'] = 'root'
@@ -155,9 +192,42 @@ class Api(object):
             Please create an issue if you need this feature!
         """
         options['module_path'] = None
+        return options
 
-        # load all the other defaults required by ansible
-        # the following are available as constants:
+    def _set_options_passwords(self, options):
+        """Sets passwords to the options dict.
+        If the user hasn't set a password, it will
+        use `remote_pass` / `conn_pass` for the connection
+        or `sudo_pass` / `become_pass` for the root.
+
+        Args:
+            options (dict): The options dictionary
+
+        Returns:
+            options (dict): The fixed options dictionary
+        """        
+        if 'passwords' in options:
+            return options
+        
+        connection_pass = options.get('remote_pass') or options.get('conn_pass')
+        become_pass = options.get('sudo_pass') or options.get('become_pass')
+        
+        options['passwords'] = {
+            'conn_pass': connection_pass,
+            'become_pass': become_pass
+        }
+        return options
+
+    def _set_required_options(self, options):
+        """Loads all defaults required by Ansible.
+        Includes the available constants
+
+        Args:
+            options (dict): The options dict
+
+        Returns:
+            options (dict): The options dict
+        """
         required_defaults = (
             'forks',
             'remote_user',
@@ -168,12 +238,24 @@ class Api(object):
         )
 
         for default in required_defaults:
-            if default not in options:
-                options[default] = getattr(
-                    C, 'DEFAULT_{}'.format(default.upper())
-                )
+            if default in options:
+                continue
+            options[default] = getattr(
+                C, 'DEFAULT_{}'.format(default.upper())
+            )
+        return options
 
-        # unfortunately, not all options seem to have accessible defaults
+    def _set_default_options(self, options, verbosity, dry_run):
+        """Not all options seem to have accessible defaults.
+
+        Args:
+            options (dict): Options dict
+            verbosity (_type_): Verbosity level
+            dry_run (bool): Whether to dry run
+
+        Returns:
+            options: The Options dict
+        """
         options['ssh_common_args'] = options.get('ssh_common_args', None)
         options['ssh_extra_args'] = options.get('ssh_extra_args', None)
         options['sftp_extra_args'] = options.get('sftp_extra_args', None)
@@ -182,31 +264,7 @@ class Api(object):
         options['diff'] = options.get('diff', False)
         options['verbosity'] = VERBOSITY.get(verbosity)
         options['check'] = dry_run
-
-        if 'passwords' not in options:
-            options['passwords'] = {
-                'conn_pass': (
-                    options.get('remote_pass') or options.get('conn_pass')
-                ),
-                'become_pass': (
-                    options.get('sudo_pass') or options.get('become_pass')
-                )
-            }
-
-        # keep host_key_checking around for the runner
-        self.host_key_checking = host_key_checking
-
-        self.options = options_as_class(options)
-        self._valid_return_codes = (0, )
-
-        self.ignore_unreachable = ignore_unreachable
-        self.ignore_errors = ignore_errors
-
-        self.environment = environment or {}
-        self.strategy = strategy
-
-        for runner in (ModuleRunner(m) for m in list_ansible_modules()):
-            runner.hookup(self)
+        return options
 
     def on_unreachable_host(self, module, host):
         # type: (str, str) -> None
@@ -261,68 +319,3 @@ class Api(object):
         self._valid_return_codes = codes # type: ignore
         yield
         self._valid_return_codes = previous_codes
-
-
-def install_strategy_plugins(directories):
-    # type: (t.List[str]) -> None
-    """
-    Loads the given strategy plugins, which is a list of directories,
-    a string with a single directory or a string with multiple directories
-    separated by colon.
-
-    As these plugins are globally loaded and cached by Ansible we do the same
-    here. We could try to bind those plugins to the Api instance, but that's
-    probably not something we'd ever have much of a use for.
-
-    Call this function before using custom strategies on the :class:`Api`
-    class.
-    """
-    if isinstance(directories, str):
-        directories = directories.split(':')
-
-    for directory in directories:
-        strategy_loader.add_directory(directory)
-
-
-def list_ansible_modules():
-    """
-    Crawls Ansible source code and returns a list of all available modules.
-    Inspired by the https://github.com/ansible/ansible/blob/devel/bin/ansible-doc.
-
-    Returns:
-        set: A set of modules
-    """    
-    modules = set()
-    paths = (p for p in module_loader._get_paths() if os.path.isdir(p))
-    for path in paths:
-        modules.update(m for m in get_modules_from_path(path))
-    return modules
-
-
-def get_modules_from_path(path):
-    # type: (str) -> t.Iterable[str]
-    """Gets all modules from the given path.
-
-    Args:
-        path (str): The path to search for modules.
-
-    Yields:
-        Iterable: The modules found in the given path.
-    """    
-    blacklisted_extensions = ('.swp', '.bak', '~', '.rpm', '.pyc')
-    blacklisted_prefixes = ('_', )
-
-    assert os.path.isdir(path)
-
-    subpaths = list((os.path.join(path, p), p) for p in os.listdir(path))
-
-    for path, name in subpaths:
-        if name.endswith(blacklisted_extensions):
-            continue
-        if name.startswith(blacklisted_prefixes):
-            continue
-        if os.path.isdir(path):
-            for module in get_modules_from_path(path):
-                yield module
-        else:
-            yield os.path.splitext(name)[0]
