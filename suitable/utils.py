@@ -69,7 +69,7 @@ def list_ansible_modules():
     Returns:
         set: A set of modules
     """    
-    modules = set()
+    modules = set() # type: t.Set[str]
     modules_paths = module_loader._get_paths()
     paths = (p for p in modules_paths if os.path.isdir(p))
     for path in paths:

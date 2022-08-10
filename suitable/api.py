@@ -30,7 +30,7 @@ class Api(object):
         sudo=False,                 # type: bool
         dry_run=False,              # type: bool
         verbosity='info',           # type: str
-        environment=None,           # type: dict
+        environment=None,           # type: dict[t.Any, t.Any]
         strategy=None,              # type: str
         **options
     ):

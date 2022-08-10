@@ -1,3 +1,6 @@
+import typing as t
+
+
 class SuitableError(Exception):
     """Base exception class
 
@@ -9,7 +12,7 @@ class SuitableError(Exception):
 
 class ModuleError(SuitableError):
     def __init__(self, module, host, result):
-        # type: (str, str, dict) -> None
+        # type: (str, str, dict[t.Any, t.Any]) -> None
         """Module
 
         :param module (str): The module

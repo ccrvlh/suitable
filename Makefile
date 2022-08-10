@@ -1,7 +1,9 @@
-old_test:
-	docker build --platform=linux/amd64 -t suitable_test_image . && \
-	docker run --rm --name suitable_runtest_instance suitable_test_image
-
+# This will run all of the tests in containers (1 as the source machine, 2 for target hosts)
 test:
-	docker-compose up --build --force-recreate
+	docker-compose -f ./servers/docker-compose.yml up --build --force-recreate
+	
+
+# This will build two containers for local testing with Pytest
+test_local:
+	docker-compose -f ./servers/docker-compose-local.yml up --build --force-recreate
 	

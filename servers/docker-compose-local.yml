@@ -1,0 +1,14 @@
+version: '3'
+services:
+  target1:
+    build:
+      context: .
+      dockerfile: Dockerfile.target 
+    ports:
+      - "9999:22"
+  target2:
+    build:
+      context: .
+      dockerfile: Dockerfile.target 
+    ports:
+      - "8888:22"

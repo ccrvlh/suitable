@@ -1,6 +1,6 @@
 from ansible.inventory.manager import InventoryManager
 
-from suitable.compat import string_types
+from suitable.compat import string_types # type: ignore
 
 
 class Inventory(dict):

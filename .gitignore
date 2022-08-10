@@ -15,3 +15,5 @@ eggs/
 .old/
 build/
 *ipynb
+__pycache__/
+notebooks/

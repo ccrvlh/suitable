@@ -176,7 +176,7 @@ class ModuleRunner(object):
 
         for server, answer in contacted_servers.items():
             success = answer['success'] # type: bool
-            result = answer['result'] # type: dict[t.Any, t.Any]
+            result = answer['result']
 
             if result.get('failed'):  # pragma: no cover
                 success = False
@@ -252,6 +252,9 @@ class ModuleRunner(object):
         would of course be preferable.
 
         """
+        if not self.api:
+            raise AttributeError('The API is not yet hooked up')
+
         # Initialize Execution
         start = datetime.utcnow()
         task_queue_manager = None
