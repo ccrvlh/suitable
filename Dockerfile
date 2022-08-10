@@ -1,6 +1,8 @@
 FROM ubuntu:18.04
 
 ARG DEBIAN_FRONTEND=noninteractive
+ENV LANG C.UTF-8
+ENV LC_ALL C.UTF-8
 
 RUN set -e && \
     apt-get clean && \
@@ -12,9 +14,6 @@ RUN set -e && \
     apt-get update
 
 RUN apt-get -y install \
-    python2.7 \
-    python-pip \
-    python-dev \
     python3.5 \
     python3-pip \
     python3-dev \
@@ -28,8 +27,7 @@ RUN apt-get -y install \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --upgrade pip && \
-    python -m pip install --upgrade pip
+RUN python3 -m pip install --upgrade pip
 
 RUN set -e && \
     python3 -m pip install --no-cache-dir "tox==3.20.1"

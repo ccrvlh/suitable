@@ -1,19 +1,16 @@
 version: '3'
 services:
-  # host:
-  #   build: .
-  #   deploy:
-  #     replicas: 0
-  #   command:
-  #     - "tox"
-  #     - "-e"
-  #     - "py35-a28"
-  #   depends_on:
-  #     - target1
-  #     - target2
-  #   volumes:
-  #     - .:/suitable
-  #   network_mode: host
+  host:
+    build: .
+    deploy:
+      replicas: 1
+    command: tox -e py36-a28,py37-a28,py38-a28,py39-a28,py36-a29,py37-a29,py38-a29,py39-a29
+    depends_on:
+      - target1
+      - target2
+    volumes:
+      - .:/suitable
+    network_mode: host
   target1:
     build:
       context: .

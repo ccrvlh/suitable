@@ -26,7 +26,7 @@ class Api(object):
         servers,                    # type: t.Optional[dict[t.Any, t.Any]]
         ignore_unreachable=False,   # type: bool
         ignore_errors=False,        # type: bool
-        host_key_checking=True,     # type: bool
+        host_key_checking=False,    # type: bool
         sudo=False,                 # type: bool
         dry_run=False,              # type: bool
         verbosity='info',           # type: str

@@ -1,6 +1,29 @@
 
 Changelog
 ---------
+XXXXX (2022-08-10)
+~~~~~~~~~~~~~~~~~~~
+
+- Refactor `options` logic on the API to make the init a bit cleaner
+- Refactor `execute` logic on the Runner to make the execute a bit cleaner
+- Moved `InventoryManager` => `inventory.py`
+- Added docstrings / types  (still 2.7 style)
+- Removed `CHANGELOG` from `README` (created CHANGELOG)
+- Added a `Quickstart` section to `README`
+- Changed name (mdoule_runner => runner) to avoid confusions with the `results`
+- Changed name (runner_result => results) to avoid confusion with the `moduel`
+- Moved code blocks: (common => utils) reduced files and made sense
+- Moved code block: context_managers => utils to leave a file with only the class
+- Bug on automatically setting localhost: Added port check before automatic localhost set.
+- Created Dockerfile (to run `tox` on multiple environments)
+- Created Dockerfile.test to simulate live hosts with SSH
+- Created docker-compose (SSH into another container)
+- Moved `tests` to top level
+- Added `Makefile` for shortcuts
+- Conftest => pass `**options` not working: options=options (Check later)
+  [lowercase]
+
+
 0.17.2 (2020-01-14)
 ~~~~~~~~~~~~~~~~~~~
 
