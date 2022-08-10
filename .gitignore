@@ -6,9 +6,11 @@ dist/
 .pytest_cache/
 .vscode/
 .coverage
+coverage/
 .DS_Store
 docs/build
 eggs/
 .venv/
+.old/
 build/
 *ipynb

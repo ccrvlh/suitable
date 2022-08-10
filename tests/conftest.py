@@ -1,10 +1,7 @@
-import port_for # type: ignore
 import pytest
 import shutil
-import subprocess
 import tempfile
 
-from uuid import uuid4
 from suitable import Api
 from suitable.mitogen import Api as MitogenApi
 from suitable.mitogen import is_mitogen_supported
@@ -44,10 +41,7 @@ class Container(object):
         options.update(kwargs)
         api_instance = api_class(servers=hosts, verbosity="info", options=options)
         return api_instance
-        # return api_class(
-        #     '%s:%s' % (self.host, self.port),
-        #     ** options
-        # )
+
 
     def vanilla_api(self, **kwargs):
         return self.spawn_api(Api, **kwargs)
@@ -65,27 +59,16 @@ def tempdir():
 
 @pytest.fixture(scope="function")
 def container():
-#     port = port_for.select_random()
-#     name = 'suitable-container-%s' % uuid4().hex
-
-#     subprocess.check_call((
-#         'docker', 'run', '-d', '--rm', '-it', '--name', name,
-#         '-p', 'localhost:%d:2222/tcp' % port,
-#         'rastasheep/ubuntu-sshd:18.04'
-#     ))
-
     yield Container('localhost', "9999", 'root', 'root')
-
-#     subprocess.call(('docker', 'stop', name))
 
 @pytest.fixture
 def target_a():
-    target_host = {"target_a": {"ansible_host": "localhost", "ansible_port": "8888", "ansible_ssh_user": "root"}}
+    target_host = {"target_a": {"ansible_host": "localhost", "ansible_port": "8888", "ansible_ssh_user": "root", "ansible_ssh_pass": "root"}}
     return target_host
 
 @pytest.fixture
 def target_b():
-    target_host = {"target_b": {"ansible_host": "localhost", "ansible_port": "9999", "ansible_ssh_user": "root"}}
+    target_host = {"target_b": {"ansible_host": "localhost", "ansible_port": "9999", "ansible_ssh_user": "root", "ansible_ssh_pass": "root"}}
     return target_host
 
 

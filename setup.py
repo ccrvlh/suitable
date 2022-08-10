@@ -14,21 +14,21 @@ def get_long_description():
             yield line.replace('\n', '')
 
 
-class PyTest(Command):
+# class PyTest(Command):
 
-    user_options = []
+#     user_options = []
 
-    def initialize_options(self):
-        pass
+#     def initialize_options(self):
+#         pass
 
-    def finalize_options(self):
-        pass
+#     def finalize_options(self):
+#         pass
 
-    def run(self):
-        import sys
-        import subprocess
-        errno = subprocess.call([sys.executable, 'runtests.py'])
-        raise SystemExit(errno)
+#     def run(self):
+#         import sys
+#         import subprocess
+#         errno = subprocess.call([sys.executable, 'runtests.py'])
+#         raise SystemExit(errno)
 
 
 setup(
