@@ -4,12 +4,14 @@ from suitable.compat import string_types
 class Inventory(dict):
 
     def __init__(self, ansible_connection=None, hosts=None):
+        # type: (str, dict) -> None
         super(Inventory, self).__init__()
         self.ansible_connection = ansible_connection
         if hosts:
             self.add_hosts(hosts)
 
     def add_host(self, server, host_variables):
+        # type: (str, dict) -> None
         self[server] = {}
 
         # [ipv6]:port
@@ -35,6 +37,7 @@ class Inventory(dict):
                 self[server]['ansible_connection'] = 'local'
 
     def add_hosts(self, servers):
+        # type: (dict) -> None
         if isinstance(servers, string_types):
             for server in servers.split(u' '):
                 self.add_host(server, {})

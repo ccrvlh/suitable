@@ -4,6 +4,7 @@ import logging
 import os
 import signal
 import sys
+import typing as t
 
 from __main__ import display
 from ansible.executor.task_queue_manager import TaskQueueManager
@@ -14,9 +15,11 @@ from ansible.vars.manager import VariableManager
 from contextlib import contextmanager
 from datetime import datetime
 from pprint import pformat
+
 from suitable.callback import SilentCallbackModule
 from suitable.common import log
 from suitable.runner_results import RunnerResults
+
 
 try:
     from ansible import context
@@ -26,9 +29,15 @@ else:
     set_global_context = context._init_global_context
 
 
+if t.TYPE_CHECKING:
+    from suitable.api import Api
+
+
 @contextmanager
 def ansible_verbosity(verbosity):
-    """ Temporarily changes the ansible verbosity. Relies on a single display
+    # type: (int) -> t.Generator[None, None, None]
+    """
+    Temporarily changes the ansible verbosity. Relies on a single display
     instance being referenced by the __main__ module.
 
     This is setup when suitable is imported, though Ansible could already
@@ -46,6 +55,7 @@ def ansible_verbosity(verbosity):
 
 @contextmanager
 def environment_variable(key, value):
+    # type: (str, t.Any) -> t.Iterator[t.Any]
     """ Temporarily overrides an environment variable. """
 
     if key not in os.environ:
@@ -65,6 +75,7 @@ def environment_variable(key, value):
 
 @contextmanager
 def host_key_checking(enable):
+    # type: (bool) -> t.Iterator[t.Any]
     """ Temporarily disables host_key_checking, which is set globally. """
 
     def as_string(b):
@@ -79,12 +90,12 @@ def host_key_checking(enable):
 
 
 class SourcelessInventoryManager(InventoryManager):
-    """ A custom inventory manager that turns the source parsing into a noop.
+    """
+    A custom inventory manager that turns the source parsing into a noop.
 
     Without this, Ansible will warn that there are no inventory sources that
     could be parsed. Naturally we do not have such sources, rendering this
     warning moot.
-
     """
 
     def parse_sources(self, *args, **kwargs):
@@ -94,8 +105,11 @@ class SourcelessInventoryManager(InventoryManager):
 class ModuleRunner(object):
 
     def __init__(self, module_name):
-        """ Runs any ansible module given the module's name and access
+        # type: (str) -> None
+        """
+        Runs any ansible module given the module's name and access
         to the api instance (done through the hookup method).
+
 
         """
         self.module_name = module_name
@@ -103,31 +117,53 @@ class ModuleRunner(object):
         self.module_args = None
 
     def __str__(self):
-        """ Return a represenation of the module, including the last
+        """
+        Return a represenation of the module, including the last
         run module_args (-> this will end up looking a lot like) an entry
         in an ansible yaml file.
-
         """
         return "{}: {}".format(self.module_name, self.module_args)
 
     @property
     def is_hooked_up(self):
+        """
+        Checks whether the module being called by the `Api` is hooked up.
+
+        Returns:
+            bool: True if is hooked up, False otherwise.
+        """        
         return self.api is not None and hasattr(self.api, self.module_name)
 
     def hookup(self, api):
-        """ Hooks this module up to the given api. """
+        # type: (Api) -> None
+        """Hooks the module to the given API
 
+        Args:
+            api (Api): The API Client.
+        """
+        if api is None:
+            raise ValueError('The API is not valid')
         assert not hasattr(api, self.module_name), """
             '{}' conflicts with existing attribute
         """.format(self.module_name)
 
-        self.api = api
+        self.api = api # type: ignore
 
         setattr(api, self.module_name, self.execute)
 
     def get_module_args(self, args, kwargs):
-        # escape equality sign, until this is fixed:
-        # https://github.com/ansible/ansible/issues/13862
+        """
+        Get the module arguments.
+        Escapes equalities signs until this is fixed:
+        https://github.com/ansible/ansible/issues/13862
+
+        Args:
+            args (_type_): _description_
+            kwargs (_type_): _description_
+
+        Returns:
+            _type_: _description_
+        """
         args = u' '.join(args).replace('=', '\\=')
 
         kwargs = u' '.join(u'{}="{}"'.format(
@@ -135,35 +171,10 @@ class ModuleRunner(object):
 
         return u' '.join((args, kwargs)).strip()
 
-    def execute(self, *args, **kwargs):
-        """ Puts args and kwargs in a way ansible can understand. Calls ansible
-        and interprets the result.
-
-        """
-        assert self.is_hooked_up, "the module should be hooked up to the api"
-
-        if set_global_context:
-            set_global_context(self.api.options)
-
-        # legacy key=value pairs shorthand approach
-        if args:
-            self.module_args = module_args = self.get_module_args(args, kwargs)
-        else:
-            self.module_args = module_args = kwargs
-
-        loader = DataLoader()
-        inventory_manager = SourcelessInventoryManager(loader=loader)
-
-        for host, host_variables in self.api.inventory.items():
-            inventory_manager._inventory.add_host(host, group='all')
-            for key, value in host_variables.items():
-                inventory_manager._inventory.set_variable(host, key, value)
-
-        for key, value in self.api.options.extra_vars.items():
-            inventory_manager._inventory.set_variable('all', key, value)
-
-        variable_manager = VariableManager(
-            loader=loader, inventory=inventory_manager)
+    def _build_play_source(self, module_args):
+        # type: (str) -> dict[str, t.Any]
+        if self.api is None:
+            raise ValueError('API must be hooked up')
 
         play_source = {
             'name': "Suitable Play",
@@ -177,41 +188,84 @@ class ModuleRunner(object):
                 'environment': self.api.environment,
             }]
         }
+        return play_source
+
+    def _build_inventory_manager(self, loader):
+        # type: (DataLoader) -> InventoryManager
+        """
+        Given the API Inventoy, builds Ansible's InventoryManager.
+        It will iterate the inventory, add hosts to the manager and set variables
+        for each of the hosts.
+
+        Returns:
+            _type_: _description_
+        """        
+        if not self.api:
+            raise AttributeError("Can't build inventory. The API is not hooked up.")
+        
+        inventory_manager = SourcelessInventoryManager(loader=loader)
+        for host, host_variables in self.api.inventory.items():
+            inventory_manager._inventory.add_host(host, group='all')
+            for key, value in host_variables.items():
+                inventory_manager._inventory.set_variable(host, key, value)
+
+        for key, value in self.api.options.extra_vars.items():
+            inventory_manager._inventory.set_variable('all', key, value)
+
+        return inventory_manager
+
+    def execute(self, *args, **kwargs):
+        """
+        Puts args and kwargs in a way ansible can understand. Calls ansible
+        and interprets the result.
+        """
+        # Initialize Execution
+        start = datetime.utcnow()
+        task_queue_manager = None
+        callback = SilentCallbackModule()
+        loader = DataLoader()
+
+        # Initial checks
+        assert self.is_hooked_up, "The module should be hooked up to the api"
+        if set_global_context:
+            set_global_context(self.api.options)
+
+        # Build the module arguments
+        self.module_args = kwargs
+        if args:
+            self.module_args = self.get_module_args(args, kwargs)
+
+        # Inventory & Playbook
+        inventory_manager = self._build_inventory_manager(loader)
+        variable_manager = VariableManager(loader=loader, inventory=inventory_manager)
+        play_source = self._build_play_source(self.module_args)
+        play = Play.load(play_source, variable_manager=variable_manager, loader=loader)
+
+        if self.api.strategy:
+            play.strategy = self.api.strategy
+
+        log.info(
+            u'running {}'.format(u'- {module_name}: {module_args}'.format(
+                module_name=self.module_name,
+                module_args=self.module_args
+            ))
+        )
 
         try:
-            start = datetime.utcnow()
-            task_queue_manager = None
-            callback = SilentCallbackModule()
-
-            play = Play.load(
-                play_source,
-                variable_manager=variable_manager,
-                loader=loader,
-            )
-
-            if self.api.strategy:
-                play.strategy = self.api.strategy
-
-            log.info(
-                u'running {}'.format(u'- {module_name}: {module_args}'.format(
-                    module_name=self.module_name,
-                    module_args=module_args
-                ))
-            )
 
             # ansible uses various levels of verbosity (from -v to -vvvvvv)
             # offering various amounts of debug information
-            #
             # we keep it a bit simpler by activating all of it during debug,
             # and falling back to the default of 0 otherwise
-            verbosity = self.api.options.verbosity == logging.DEBUG and 6 or 0
 
+            verbosity = self.api.options.verbosity == logging.DEBUG and 6 or 0
             with ansible_verbosity(verbosity):
 
                 # host_key_checking is special, since not each connection
                 # plugin handles it the same way, we need to apply both
                 # environment variable and Ansible constant when running a
                 # command in the runner to be successful
+
                 with host_key_checking(self.api.host_key_checking):
                     kwargs = dict(
                         inventory=inventory_manager,
@@ -269,25 +323,66 @@ class ModuleRunner(object):
 
         return self.evaluate_results(callback)
 
-    def ignore_further_calls_to_server(self, server):
-        """ Takes a server out of the list. """
+    def ignore_further_calls_to_server(self, server: str):
+        """
+        Ignore further calls to the given server.
+
+        Args:
+            server (str): The server to ignore.
+        """
+        if not self.api:
+            raise AttributeError('The API is not yet hooked up')
         log.error(u'ignoring further calls to {}'.format(server))
         del self.api.inventory[server]
 
     def trigger_event(self, server, method, args):
+        # type: (str, str, tuple[t.Any, ...]) -> None
+        """
+        Trigers an event based based on the server and method.
+
+        Args:
+            server (str): The server to trigger the event on.
+            method (str): The method to trigger the event on.
+            args (tuple[t.Any, ...]): Arguments
+        """        
         try:
             action = getattr(self.api, method)(*args)
-
             if action != 'keep-trying':
                 self.ignore_further_calls_to_server(server)
+
         except Exception:
             self.ignore_further_calls_to_server(server)
             raise
 
     def evaluate_results(self, callback):
-        """ prepare the result of runner call for use with RunnerResults. """
+        # type: (SilentCallbackModule) -> RunnerResults
+        """
+        Prepare the result of runner call for use with RunnerResults.
+        If none of the modules in our tests hit the 'failed' result
+        codepath (which seems to not be implemented by all modules)
+        so we ignore this branch since it's rather trivial.
 
-        for server, result in callback.unreachable.items():
+        Review RunnerResults:
+        This is a weird structure because RunnerResults still works
+        like it did with Ansible 1.x, where the results where structured
+        like this.
+
+        Args:
+            callback (SilentCallbackModule): The callback to use.
+
+        Raises:
+            AttributeError: If the API is not hooked up
+
+        Returns:
+            RunnerResults: A RunnerResults (dict) instance.
+        """
+        if not self.api:
+            raise AttributeError('The API is not yet hooked up')
+
+        contacted_servers: dict[str, t.Any] = callback.contacted
+        unreacheable_servers: dict[str, t.Any] = callback.unreachable
+
+        for server, result in unreacheable_servers.items():
             log.error(u'{} could not be reached'.format(server))
             log.debug(u'ansible-output =>\n{}'.format(pformat(result)))
 
@@ -298,14 +393,10 @@ class ModuleRunner(object):
                 self, server
             ))
 
-        for server, answer in callback.contacted.items():
+        for server, answer in contacted_servers.items():
+            success: bool = answer['success']
+            result: dict[t.Any, t.Any] = answer['result'] # type: ignore
 
-            success = answer['success']
-            result = answer['result']
-
-            # none of the modules in our tests hit the 'failed' result
-            # codepath (which seems to not be implemented by all modules)
-            # seo we ignore this branch since it's rather trivial
             if result.get('failed'):  # pragma: no cover
                 success = False
 
@@ -313,9 +404,7 @@ class ModuleRunner(object):
                 if self.api.is_valid_return_code(result['rc']):
                     success = True
 
-            # Add success to result
             result['success'] = success
-
             if not success:
                 log.error(u'{} failed on {}'.format(self, server))
                 log.debug(u'ansible-output =>\n{}'.format(pformat(result)))
@@ -327,16 +416,15 @@ class ModuleRunner(object):
                     self, server, result
                 ))
 
-        # XXX this is a weird structure because RunnerResults still works
-        # like it did with Ansible 1.x, where the results where structured
-        # like this
-        return RunnerResults({
+        results = RunnerResults({
             'contacted': {
                 server: answer['result']
-                for server, answer in callback.contacted.items()
+                for server, answer in contacted_servers.items()
             },
             'unreachable': {
                 server: result
-                for server, result in callback.unreachable.items()
+                for server, result in unreacheable_servers.items()
             }
         })
+
+        return results

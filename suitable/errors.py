@@ -1,9 +1,21 @@
 class SuitableError(Exception):
+    """Base exception class
+
+    Args:
+        Exception (Exception): Base exception.
+    """    
     pass
 
 
 class ModuleError(SuitableError):
     def __init__(self, module, host, result):
+        # type: (str, str, dict) -> None
+        """Module
+
+        :param module (str): The module
+        :param host (str): The host on which the module was run.
+        :param result (RunnerResults): The results of the module run.
+        """        
         self.module = module
         self.host = host
         self.result = result
@@ -31,6 +43,11 @@ class ModuleError(SuitableError):
 
 
 class UnreachableError(SuitableError):
+    """Host could not be reached.
+
+    Args:
+        SuitableError (SuitableError): Suitable raised exception.
+    """    
     def __init__(self, module, host):
         self.module = module
         self.host = host

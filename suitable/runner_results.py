@@ -15,7 +15,8 @@ class RunnerResults(dict):
 
     """
 
-    def __init__(self, results: dict[t.Any, t.Any]):
+    def __init__(self, results):
+        #  type: (dict[t.Any, t.Any]) -> None
         """
         Initializes the class with a dictionary of results.
 
@@ -24,7 +25,8 @@ class RunnerResults(dict):
         """        
         self.update(results)
 
-    def __getattr__(self, key: str):
+    def __getattr__(self, key):
+        #  type: (str) -> t.Any
         """
         Dunder method to make a dict behaviour as keys were methods.
         Allows for::
@@ -40,7 +42,8 @@ class RunnerResults(dict):
         """        
         return lambda server=None: self.acquire(server, key)
 
-    def acquire(self, server: t.Optional[str] = None, key: t.Optional[str] = None):
+    def acquire(self, server, key):
+        #  type: (t.Optional[str], t.Optional[str]) -> t.Any
         """
         Aquires the result for a given server and key. If no server is given,
         and exactly one contacted server exists return the value of said server directly.
@@ -56,7 +59,7 @@ class RunnerResults(dict):
         Returns:
             t.Any: ...
         """
-        contacted_servers: t.Optional[dict] = self['contacted']
+        contacted_servers: dict = self['contacted']
         if server is None and len(contacted_servers) == 1:
             server = next((k for k in contacted_servers.keys()), None)
 

@@ -1,5 +1,5 @@
-import logging
 import os
+import typing as t
 
 from ansible import constants as C
 from ansible.plugins.loader import module_loader
@@ -7,17 +7,10 @@ from ansible.plugins.loader import strategy_loader
 from contextlib import contextmanager
 from suitable.errors import UnreachableError, ModuleError
 from suitable.module_runner import ModuleRunner
-from suitable.utils import options_as_class
+from suitable.runner_results import RunnerResults
+from suitable.utils import options_as_class, VERBOSITY
 from suitable.inventory import Inventory
 
-
-VERBOSITY = {
-    'critical': logging.CRITICAL,
-    'error': logging.ERROR,
-    'warn': logging.WARN,
-    'info': logging.INFO,
-    'debug': logging.DEBUG
-}
 
 
 class Api(object):
@@ -30,15 +23,16 @@ class Api(object):
     """
 
     def __init__(
-        self, servers,
-        ignore_unreachable=False,
-        ignore_errors=False,
-        host_key_checking=True,
-        sudo=False,
-        dry_run=False,
-        verbosity='info',
-        environment=None,
-        strategy=None,
+        self,
+        servers,                    # type: t.Optional[dict[t.Any, t.Any]]
+        ignore_unreachable=False,   # type: bool
+        ignore_errors=False,        # type: bool
+        host_key_checking=True,     # type: bool
+        sudo=False,                 # type: bool
+        dry_run=False,              # type: bool
+        verbosity='info',           # type: str
+        environment=None,           # type: dict
+        strategy=None,              # type: str
         **options
     ):
         """
@@ -215,6 +209,7 @@ class Api(object):
             runner.hookup(self)
 
     def on_unreachable_host(self, module, host):
+        # type: (str, str) -> None
         """ If you want to customize your error handling, this would be
         the point to write your own method in a subclass.
 
@@ -230,6 +225,7 @@ class Api(object):
         raise UnreachableError(module, host)
 
     def on_module_error(self, module, host, result):
+        # type: (str, str, RunnerResults) -> None
         """ If you want to customize your error handling, this would be
         the point to write your own method in a subclass.
 
@@ -245,11 +241,14 @@ class Api(object):
         raise ModuleError(module, host, result)
 
     def is_valid_return_code(self, code):
+        # type: (int) -> bool
         return code in self._valid_return_codes
 
     @contextmanager
     def valid_return_codes(self, *codes):
-        """ Sets codes which are considered valid when returned from
+        # type: (*t.Any) -> t.Iterator[t.Any]
+        """
+        Sets codes which are considered valid when returned from
         command modules. The default is (0, ).
 
         Should be used as a context::
@@ -259,15 +258,15 @@ class Api(object):
 
         """
         previous_codes = self._valid_return_codes
-        self._valid_return_codes = codes
-
+        self._valid_return_codes = codes # type: ignore
         yield
-
         self._valid_return_codes = previous_codes
 
 
 def install_strategy_plugins(directories):
-    """ Loads the given strategy plugins, which is a list of directories,
+    # type: (t.List[str]) -> None
+    """
+    Loads the given strategy plugins, which is a list of directories,
     a string with a single directory or a string with multiple directories
     separated by colon.
 
@@ -277,7 +276,6 @@ def install_strategy_plugins(directories):
 
     Call this function before using custom strategies on the :class:`Api`
     class.
-
     """
     if isinstance(directories, str):
         directories = directories.split(':')
@@ -287,20 +285,30 @@ def install_strategy_plugins(directories):
 
 
 def list_ansible_modules():
-    # inspired by
-    # https://github.com/ansible/ansible/blob/devel/bin/ansible-doc
+    """
+    Crawls Ansible source code and returns a list of all available modules.
+    Inspired by the https://github.com/ansible/ansible/blob/devel/bin/ansible-doc.
 
-    paths = (p for p in module_loader._get_paths() if os.path.isdir(p))
-
+    Returns:
+        set: A set of modules
+    """    
     modules = set()
-
+    paths = (p for p in module_loader._get_paths() if os.path.isdir(p))
     for path in paths:
         modules.update(m for m in get_modules_from_path(path))
-
     return modules
 
 
 def get_modules_from_path(path):
+    # type: (str) -> t.Iterable[str]
+    """Gets all modules from the given path.
+
+    Args:
+        path (str): The path to search for modules.
+
+    Yields:
+        Iterable: The modules found in the given path.
+    """    
     blacklisted_extensions = ('.swp', '.bak', '~', '.rpm', '.pyc')
     blacklisted_prefixes = ('_', )
 

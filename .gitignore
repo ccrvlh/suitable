@@ -4,6 +4,7 @@
 dist/
 .cache/
 .pytest_cache/
+.vscode/
 .coverage
 .DS_Store
 docs/build

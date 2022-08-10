@@ -1,4 +1,4 @@
-import __main__
+import __main__ # type: ignore
 
 from ansible.utils.display import Display
 __main__.display = Display()
