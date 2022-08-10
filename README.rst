@@ -34,8 +34,8 @@ The official way to use Ansible from Python is documented here:
 Compatibility
 -------------
 
-* Python 2.7 and Python 3.5+.
-* Ansible 2.4+
+* Python 3.5+ (only automated tests with 3.7+)
+* Ansible 2.8+
 * Mitogen 0.2.6+ (currently incompatible with Ansible 2.8)
 
 Support for older releases is kept only if possible. New Ansible releases
@@ -66,6 +66,12 @@ Todo
 - Still need to check for 2.7 and 3.5/3.6 support.
 - Ansible versions lower than 2.7 are not supported: currently Suitable uses `ansible.utils.display` which was not present in 2.7 and lower.
 - Mitogen is yet not supported. Still need to add tests for it.
+- Tox is absurdly slow when using Docker, so all tests are being ran locally as of now. This requires Python 3.7 and 3.8 to be installed.
+- Still need to make Flake8 config work with Pep8 tox command. Seems that the configuration at `setup.cfg` is not being picked up by `tox`.
+- More tests are needed for multiple hosts and different hosts formats.
+- Change results callback to use the new Ansible 2.8+ callback API. This would be a breaking change.
+- Coverage is at about 86%. Need to test compatibility with 2.7 and Mitogen to increase significantly.
+- Add stubs for `core` modules.
 
 
 Build Status
