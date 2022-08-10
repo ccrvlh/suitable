@@ -14,9 +14,8 @@ MITOGEN_LOADED = False
 def assert_mitogen_support():
 
     if mitogen.__version__ <= (0, 2, 6):
-        if ansible.__version__.startswith('2.8'):
-            raise RuntimeError(
-                "Mitogen <= 0.2.6 is incompatible with Ansible 2.8")
+        if ansible.__version__.startswith("2.8"):
+            raise RuntimeError("Mitogen <= 0.2.6 is incompatible with Ansible 2.8")
 
 
 def is_mitogen_supported():
@@ -39,8 +38,7 @@ def load_mitogen():
         raise RuntimeError("Mitogen could not be found. Is it installed?")
 
     strategy_path = os.path.join(
-        os.path.dirname(ansible_mitogen.__file__),
-        'plugins/strategy'
+        os.path.dirname(ansible_mitogen.__file__), "plugins/strategy"
     )
 
     install_strategy_plugins(strategy_path)
@@ -48,13 +46,13 @@ def load_mitogen():
 
 
 class Api(Base):
-    """ The Suitable Api with Mitogen integration. """
+    """The Suitable Api with Mitogen integration."""
 
     def __init__(self, *args, **kwargs):
         if not MITOGEN_LOADED:
             load_mitogen()
 
-        if 'strategy' not in kwargs:
-            kwargs['strategy'] = 'mitogen_linear'
+        if "strategy" not in kwargs:
+            kwargs["strategy"] = "mitogen_linear"
 
         super(Api, self).__init__(*args, **kwargs)

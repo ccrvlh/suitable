@@ -23,15 +23,15 @@ class Api(object):
 
     def __init__(
         self,
-        servers,                    # type: t.Optional[dict[t.Any, t.Any]]
-        ignore_unreachable=False,   # type: bool
-        ignore_errors=False,        # type: bool
-        host_key_checking=False,    # type: bool
-        sudo=False,                 # type: bool
-        dry_run=False,              # type: bool
-        verbosity='info',           # type: str
-        environment=None,           # type: dict[t.Any, t.Any]
-        strategy=None,              # type: str
+        servers,  # type: t.Optional[dict[t.Any, t.Any]]
+        ignore_unreachable=False,  # type: bool
+        ignore_errors=False,  # type: bool
+        host_key_checking=False,  # type: bool
+        sudo=False,  # type: bool
+        dry_run=False,  # type: bool
+        verbosity="info",  # type: str
+        environment=None,  # type: dict[t.Any, t.Any]
+        strategy=None,  # type: str
         **options
     ):
         """
@@ -138,9 +138,9 @@ class Api(object):
         """
         # Initial Config
         # Keeps host_key_checking around for the runner
-        self.inventory = Inventory(options.get('connection', None), hosts=servers)
+        self.inventory = Inventory(options.get("connection", None), hosts=servers)
         self.host_key_checking = host_key_checking
-        self._valid_return_codes = (0, )
+        self._valid_return_codes = (0,)
         self.ignore_unreachable = ignore_unreachable
         self.ignore_errors = ignore_errors
         self.environment = environment or {}
@@ -164,7 +164,7 @@ class Api(object):
 
             >>> ansible = Api(host)
             >>> ansible.shell("whoami")
-        """        
+        """
         for runner in (ModuleRunner(m) for m in list_ansible_modules()):
             runner.hookup(self)
 
@@ -181,18 +181,20 @@ class Api(object):
         Returns:
             options (dict): the options dictionary
         """
-        if 'connection' not in options:
-            options['connection'] = 'smart'
+        if "connection" not in options:
+            options["connection"] = "smart"
 
-        if not ('become' in options or 'become_user' in options):
-            options['become'] = sudo
-            options['become_user'] = 'root'
+        if not ("become" in options or "become_user" in options):
+            options["become"] = sudo
+            options["become_user"] = "root"
 
-        assert 'module_path' not in options, """
+        assert (
+            "module_path" not in options
+        ), """
             Suitable does not yet support the setting of a custom module path.
             Please create an issue if you need this feature!
         """
-        options['module_path'] = None
+        options["module_path"] = None
         return options
 
     def _set_options_passwords(self, options):
@@ -206,16 +208,16 @@ class Api(object):
 
         Returns:
             options (dict): The fixed options dictionary
-        """        
-        if 'passwords' in options:
+        """
+        if "passwords" in options:
             return options
-        
-        connection_pass = options.get('remote_pass') or options.get('conn_pass')
-        become_pass = options.get('sudo_pass') or options.get('become_pass')
-        
-        options['passwords'] = {
-            'conn_pass': connection_pass,
-            'become_pass': become_pass
+
+        connection_pass = options.get("remote_pass") or options.get("conn_pass")
+        become_pass = options.get("sudo_pass") or options.get("become_pass")
+
+        options["passwords"] = {
+            "conn_pass": connection_pass,
+            "become_pass": become_pass,
         }
         return options
 
@@ -230,20 +232,18 @@ class Api(object):
             options (dict): The options dict
         """
         required_defaults = (
-            'forks',
-            'remote_user',
-            'private_key_file',
-            'become',
-            'become_method',
-            'become_user'
+            "forks",
+            "remote_user",
+            "private_key_file",
+            "become",
+            "become_method",
+            "become_user",
         )
 
         for default in required_defaults:
             if default in options:
                 continue
-            options[default] = getattr(
-                C, 'DEFAULT_{}'.format(default.upper())
-            )
+            options[default] = getattr(C, "DEFAULT_{}".format(default.upper()))
         return options
 
     def _set_default_options(self, options, verbosity, dry_run):
@@ -257,19 +257,19 @@ class Api(object):
         Returns:
             options: The Options dict
         """
-        options['ssh_common_args'] = options.get('ssh_common_args', None)
-        options['ssh_extra_args'] = options.get('ssh_extra_args', None)
-        options['sftp_extra_args'] = options.get('sftp_extra_args', None)
-        options['scp_extra_args'] = options.get('scp_extra_args', None)
-        options['extra_vars'] = options.get('extra_vars', {})
-        options['diff'] = options.get('diff', False)
-        options['verbosity'] = VERBOSITY.get(verbosity)
-        options['check'] = dry_run
+        options["ssh_common_args"] = options.get("ssh_common_args", None)
+        options["ssh_extra_args"] = options.get("ssh_extra_args", None)
+        options["sftp_extra_args"] = options.get("sftp_extra_args", None)
+        options["scp_extra_args"] = options.get("scp_extra_args", None)
+        options["extra_vars"] = options.get("extra_vars", {})
+        options["diff"] = options.get("diff", False)
+        options["verbosity"] = VERBOSITY.get(verbosity)
+        options["check"] = dry_run
         return options
 
     def on_unreachable_host(self, module, host):
         # type: (str, str) -> None
-        """ If you want to customize your error handling, this would be
+        """If you want to customize your error handling, this would be
         the point to write your own method in a subclass.
 
         Note that this method is not called if ignore_unreachable is True.
@@ -285,7 +285,7 @@ class Api(object):
 
     def on_module_error(self, module, host, result):
         # type: (str, str, RunnerResults) -> None
-        """ If you want to customize your error handling, this would be
+        """If you want to customize your error handling, this would be
         the point to write your own method in a subclass.
 
         Note that this method is not called if ignore_errors is True.
@@ -317,6 +317,6 @@ class Api(object):
 
         """
         previous_codes = self._valid_return_codes
-        self._valid_return_codes = codes # type: ignore
+        self._valid_return_codes = codes  # type: ignore
         yield
         self._valid_return_codes = previous_codes

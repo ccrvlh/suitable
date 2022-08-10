@@ -1,10 +1,15 @@
-
 import typing as t
 
 from ansible import constants as C
 
 class Api(object):
-    def package(self, name: str, version: t.Optional[str] =None, state: str = 'present', **options):
+    def package(
+        self,
+        name: str,
+        version: t.Optional[str] = None,
+        state: str = "present",
+        **options
+    ):
         """
         Installs a package.
         :param name:

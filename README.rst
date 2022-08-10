@@ -59,6 +59,14 @@ To run tests locally, use `tox`. For more information, see
 
 Warning: to be able to run tests locally all Python versions must be installed and in PATH.
 
+Todo
+---------
+
+- As of now this branch is only tested with Python 3.7+ and Ansible 2.8+. With this setup all major Ansible releases (both Core and Community) should work.
+- Still need to check for 2.7 and 3.5/3.6 support.
+- Ansible versions lower than 2.7 are not supported: currently Suitable uses `ansible.utils.display` which was not present in 2.7 and lower.
+- Mitogen is yet not supported. Still need to add tests for it.
+
 
 Build Status
 ------------

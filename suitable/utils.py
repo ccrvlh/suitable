@@ -9,26 +9,25 @@ from contextlib import contextmanager
 from ansible.plugins.loader import module_loader
 from ansible.plugins.loader import strategy_loader
 
-log = logging.getLogger('suitable')
+log = logging.getLogger("suitable")
 
 
 VERBOSITY = {
-    'critical': logging.CRITICAL,
-    'error': logging.ERROR,
-    'warn': logging.WARN,
-    'info': logging.INFO,
-    'debug': logging.DEBUG
+    "critical": logging.CRITICAL,
+    "error": logging.ERROR,
+    "warn": logging.WARN,
+    "info": logging.INFO,
+    "debug": logging.DEBUG,
 }
 
 
 class NullHandler(logging.Handler):
     def emit(self, record):
-        # type: (logging.LogRecord) -> None        
+        # type: (logging.LogRecord) -> None
         pass
 
 
 def options_as_class(dictionary):
-
     class Options(object):
         pass
 
@@ -55,7 +54,7 @@ def install_strategy_plugins(directories):
     class.
     """
     if isinstance(directories, str):
-        parsed_directories = directories.split(':')
+        parsed_directories = directories.split(":")
 
     for directory in parsed_directories:
         strategy_loader.add_directory(directory)
@@ -68,8 +67,8 @@ def list_ansible_modules():
 
     Returns:
         set: A set of modules
-    """    
-    modules = set() # type: t.Set[str]
+    """
+    modules = set()  # type: t.Set[str]
     modules_paths = module_loader._get_paths()
     paths = (p for p in modules_paths if os.path.isdir(p))
     for path in paths:
@@ -86,9 +85,9 @@ def get_modules_from_path(path):
 
     Yields:
         Iterable: The modules found in the given path.
-    """    
-    blacklisted_extensions = ('.swp', '.bak', '~', '.rpm', '.pyc')
-    blacklisted_prefixes = ('_', )
+    """
+    blacklisted_extensions = (".swp", ".bak", "~", ".rpm", ".pyc")
+    blacklisted_prefixes = ("_",)
     assert os.path.isdir(path)
     subpaths = list((os.path.join(path, p), p) for p in os.listdir(path))
 
@@ -127,7 +126,7 @@ def ansible_verbosity(verbosity):
 @contextmanager
 def environment_variable(key, value):
     # type: (str, t.Any) -> t.Iterator[t.Any]
-    """ Temporarily overrides an environment variable. """
+    """Temporarily overrides an environment variable."""
 
     previous = None
     if key in os.environ:
@@ -145,17 +144,16 @@ def environment_variable(key, value):
 @contextmanager
 def host_key_checking(enable):
     # type: (bool) -> t.Iterator[t.Any]
-    """ Temporarily disables host_key_checking, which is set globally. """
+    """Temporarily disables host_key_checking, which is set globally."""
 
     def as_string(b):
-        return b and 'True' or 'False'
+        return b and "True" or "False"
 
-    with environment_variable('ANSIBLE_HOST_KEY_CHECKING', as_string(enable)):
+    with environment_variable("ANSIBLE_HOST_KEY_CHECKING", as_string(enable)):
         previous = ansible.constants.HOST_KEY_CHECKING
         ansible.constants.HOST_KEY_CHECKING = enable
         yield
         ansible.constants.HOST_KEY_CHECKING = previous
-
 
 
 log.addHandler(NullHandler())

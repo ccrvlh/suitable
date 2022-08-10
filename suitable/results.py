@@ -5,7 +5,7 @@ class RunnerResults(dict):
     """
     Wraps the results of parsed module_runner output. The result may
     be used just like it is in Ansible::
-        
+
         >>> result['contacted']['server']['rc']
 
     Alternatively can be used accessing keys as methods::
@@ -22,7 +22,7 @@ class RunnerResults(dict):
 
         Args:
             results (dict[t.Any, t.Any]): A dicionary.
-        """        
+        """
         self.update(results)
 
     def __getattr__(self, key):
@@ -39,7 +39,7 @@ class RunnerResults(dict):
 
         Returns:
             t.Any: ...
-        """        
+        """
         return lambda server=None: self.acquire(server, key)
 
     def acquire(self, server, key):
@@ -59,7 +59,7 @@ class RunnerResults(dict):
         Returns:
             t.Any: ...
         """
-        contacted_servers = self['contacted'] # type: dict
+        contacted_servers = self["contacted"]  # type: dict
         if server is None and len(contacted_servers) == 1:
             server = next((k for k in contacted_servers.keys()), None)
 

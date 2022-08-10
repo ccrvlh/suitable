@@ -6,4 +6,5 @@ test:
 # This will build two containers for local testing with Pytest
 test_local:
 	docker-compose -f ./servers/docker-compose-local.yml up --build --force-recreate -d
+	tox
 	
