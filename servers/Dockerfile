@@ -30,7 +30,7 @@ RUN apt-get -y install \
 RUN python3 -m pip install --upgrade pip
 
 RUN set -e && \
-    python3 -m pip install --no-cache-dir "tox==3.20.1"
+    python3 -m pip install --no-cache-dir tox
 
 COPY . /suitable
 WORKDIR /suitable

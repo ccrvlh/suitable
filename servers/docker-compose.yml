@@ -6,7 +6,10 @@ services:
       dockerfile: Dockerfile
     deploy:
       replicas: 1
-    command: tox -e py36-a28,py37-a28,py38-a28,py39-a28,py36-a29,py37-a29,py38-a29,py39-a29
+    command: tox -vvv -e py36-a210
+    # command: tox -e py36-a28,py36-a29,py36-a210,py36-a211,py36-a212,py36-a213,py36-a300,py36-a400,py36-a500,py36-a600
+    environment:
+      - ANSIBLE_SKIP_CONFLICT_CHECK=1
     depends_on:
       - target1
       - target2
