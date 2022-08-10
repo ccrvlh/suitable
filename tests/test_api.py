@@ -15,6 +15,10 @@ from suitable.results import RunnerResults
 from suitable.compat import text_type
 
 
+def test_containers_are_running():
+    pass
+
+
 def test_auto_localhost():
     host = Api("localhost")
     assert host.inventory['localhost']['ansible_connection'] == 'local'
@@ -230,7 +234,23 @@ def test_dict_args(tempdir, target_a):
     api.set_stats(data={'foo': 'bar'})
 
 
-# @pytest.mark.parametrize("server", ('target_a',))
+def test_escaping(tempdir, target_a):
+    api = Api(target_a, sudo=True)
+    special_dir = os.path.join(tempdir, 'special dir with "-char')
+    api.file(path=special_dir, state="directory")
+    api.file(dest=os.path.join(special_dir, 'foo.txt'), state='touch')
+
+
+def test_extra_vars(tempdir, target_a):
+    api = Api(target_a, extra_vars={'path': tempdir})
+    api.file(path=tempdir, state="directory")
+    api.file(dest="{{ path }}/foo.txt", state='touch')
+    result = api.stat(path=tempdir + '/foo.txt')
+    assert result['contacted']['target_a']['stat']['exists'] is True
+
+
+
+# @pytest.mark.parametrize("server", ("localhost:8888",))
 # def test_results_single_server(server):
 #     result = Api(server).command('whoami')
 #     assert result.rc() == 0
@@ -245,22 +265,6 @@ def test_dict_args(tempdir, target_a):
 #     assert results.rc(server[1]) == 0
 
 
-# def test_escaping(tempdir, target_a):
-#     special_dir = os.path.join(tempdir, 'special dir with "-char')
-#     os.mkdir(special_dir)
-
-#     api = Api(target_a, sudo=True)
-#     api.file(
-#         dest=os.path.join(special_dir, 'foo.txt'),
-#         state='touch'
-#     )
-
-
-# def test_extra_vars(tempdir, target_a):
-#     api = Api(target_a, extra_vars={'path': tempdir})
-#     api.file(dest="{{ path }}/foo.txt", state='touch')
-
-#     assert os.path.exists(tempdir + '/foo.txt')
 
 
 # def test_same_server_multiple_ports(target_a, target_b):

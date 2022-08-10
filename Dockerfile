@@ -37,5 +37,5 @@ RUN set -e && \
 COPY . /suitable
 WORKDIR /suitable
 
-CMD ["tox","-e","py35-a28"]
+# CMD ["tox","-e","py35-a28"]
 # CMD ["sleep","99999999"]
