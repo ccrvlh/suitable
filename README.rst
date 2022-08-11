@@ -41,6 +41,11 @@ Compatibility
 Support for older releases is kept only if possible. New Ansible releases
 are favored over old ones.
 
+Currently tested Ansible versions:
+- Ansible: 2.8, 2.9, 2.10, 4.x, 5.x, 6.x
+- Ansible Core: 2.8, 2.9, 2.10, 2.12, 2.13
+
+
 Run Tests
 ---------
 
@@ -57,7 +62,7 @@ To run tests locally, use `tox`. For more information, see
     tox
 
 
-Warning: to be able to run tests locally all Python versions must be installed and in PATH.
+Warning: to be able to run tests locally, Python (3.7 and 3.8) versions must be installed and in PATH.
 
 Todo
 ---------

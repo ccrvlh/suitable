@@ -135,6 +135,10 @@ class Api(object):
 
             `<http://docs.ansible.com/ansible/developing_api.html>`_
 
+        # Check for latest version!
+        List of Ansible Core modules: https://docs.ansible.com/ansible/2.4/acl_module.html
+
+
         """
         # Initial Config
         # Keeps host_key_checking around for the runner

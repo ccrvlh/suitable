@@ -1,3 +1,76 @@
+"""
+List of old Core maitained packages: https://docs.ansible.com/ansible/2.4/core_maintained.html
+Still need to find the new ones.
+
+This provides autocomplete and type stubs for the existing Ansible Core modules. Community module will not be supported.
+Assess the viability of building types and docstring automatically from Ansible module documentation.
+Example (AptKey Module)::
+
+    description:
+    - Add or remove an I(apt) key, optionally downloading it.
+    options:
+        id:
+            description:
+                - The identifier of the key.
+                - Including this allows check mode to correctly report the changed state.
+                - If specifying a subkey's id be aware that apt-key does not understand how to remove keys via a subkey id.  Specify the primary key's id instead.
+                - This parameter is required when C(state) is set to C(absent).
+            type: str
+        data:
+            description:
+                - The keyfile contents to add to the keyring.
+            type: str
+        file:
+            description:
+                - The path to a keyfile on the remote server to add to the keyring.
+            type: path
+        keyring:
+            description:
+                - The full path to specific keyring file in C(/etc/apt/trusted.gpg.d/).
+            type: path
+            version_added: "1.3"
+        url:
+            description:
+                - The URL to retrieve key from.
+            type: str
+        keyserver:
+            description:
+                - The keyserver to retrieve key from.
+            type: str
+            version_added: "1.6"
+        state:
+            description:
+                - Ensures that the key is present (added) or absent (revoked).
+            type: str
+            choices: [ absent, present ]
+            default: present
+        validate_certs:
+            description:
+                - If C(no), SSL certificates for the target url will not be validated. This should only be used
+                on personally controlled sites using self-signed certificates.
+            type: bool
+            default: 'yes'
+
+
+Would become::
+
+    def module(self, id: str, data: str, file: str, keyring: str, url: str, keyserver: str, state: str, validate_certs: bool):
+        "
+         Add or remove an I(apt) key, optionally downloading it.
+
+            :param id (str): The identifier of the key.
+            :param data: The keyfile contents to add to the keyring.
+            :param file: The path to a keyfile on the remote server to add to the keyring.
+            :param keyring: The full path to specific keyring file in C(/etc/apt/trusted.gpg.d/).
+            :param url: The URL to retrieve key from.
+            :param keyserver: The keyserver to retrieve key from.
+            :param state: Ensures that the key is present (added) or absent (revoked). [ absent, present ]
+            :param validate_certs: If C(no), SSL certificates for the target url will not be validated. This should only be used on personally controlled sites using self-signed certificates.
+            :returns:
+            :rtype:
+        "
+
+"""
 import typing as t
 
 from ansible import constants as C
